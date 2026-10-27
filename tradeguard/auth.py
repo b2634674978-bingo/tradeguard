@@ -66,7 +66,7 @@ def login_widget() -> None:
             st.rerun()
         return
 
-    with st.expander("管理员登录", expanded=False):
+    with st.expander("🔐 管理员登录", expanded=True):
         password = st.text_input("管理员密码", type="password", key="tg_admin_password")
         if st.button("登录", key="tg_admin_login", use_container_width=True):
             if verify_password(password):
