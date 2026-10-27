@@ -64,9 +64,11 @@ def render(db) -> None:
                 st.write(f"联系人：{report['contact_name'] or '未填写'} · 公司：{report['company'] or '未填写'}")
                 st.write(f"经过：{report['narrative']}")
                 # 显示截图
-                if report['evidence']:
+                if report['evidence'] and report['evidence'].startswith("data:image"):
                     img_list = report['evidence'].split("|||")
-                    st.image(img_list, use_container_width=True)
+                    st.image(img_list, width=400)
+                else:
+                    st.caption("📷 已上传截图")
                 col1, col2 = st.columns(2)
                 if col1.button("✅ 通过", key=f"approve_{report['id']}", use_container_width=True):
                     db.set_status(report['id'], 'approved')
