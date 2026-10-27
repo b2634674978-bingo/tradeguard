@@ -25,7 +25,7 @@ def render(db) -> None:
     if "search_query" not in st.session_state:
         st.session_state["search_query"] = last_query
     theme.hero(
-        "TRADEGUARD · 交易前先查一查",
+        "交易前先查一查",
         "这个名字，靠谱吗？",
         "输入 WhatsApp 号码、公司名或联系人，查一查本地情报库里的历史举报。"
         "数据只存在你的电脑上，查询本身不会通知对方。",

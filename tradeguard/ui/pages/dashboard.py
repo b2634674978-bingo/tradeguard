@@ -15,7 +15,7 @@ except Exception:  # pragma: no cover - pandas 随 streamlit 安装
 
 def render(db) -> None:
     theme.page_header(
-        "DASHBOARD · 数据看板",
+        "数据看板",
         "骗术在往哪里走？",
         "基于本地库的聚合视图：新增趋势、问题类型、国家分布和高风险号码。",
     )

@@ -20,7 +20,7 @@ CONFIDENCE_LABELS = {"high": "高", "medium": "中", "low": "低"}
 
 def render(db) -> None:
     theme.page_header(
-        "REPORT · 上传被骗经历",
+        "上传被骗经历",
         "把一次受骗，变成所有人的防线",
         "上传 WhatsApp 导出的聊天记录，系统自动提取对方号码、时间线和风险信号；"
         "补充经过后入库。只保存必要证据，不保存完整聊天原文。",

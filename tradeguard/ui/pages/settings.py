@@ -30,7 +30,7 @@ COMPLIANCE_TEXT = """
 
 def render(db) -> None:
     theme.page_header(
-        "SETTINGS · 设置与合规",
+        "设置与合规",
         "你的数据，只属于你" if not public_mode() else "公开演示版 · 管理入口",
         "备份、导入导出、复核申诉，以及这个产品必须守住的边界。"
         if not public_mode()
@@ -105,6 +105,31 @@ def render(db) -> None:
                 removed = db.delete_demo()
                 st.success(f"已删除 {removed} 条演示记录。")
                 st.rerun()
+
+        with st.container(border=True):
+            st.markdown("#### 待审核举报队列")
+            pending = db.list_pending_reports(20)
+            if not pending:
+                st.caption("暂无待审核的举报。")
+            else:
+                st.caption(f"有 {len(pending)} 条举报等待你审核。")
+                for report in pending:
+                    with st.expander(f"#{report['id']} · {report.get('contact_name', '')} · {report.get('phones', '')} · {report['created_at'][:10]}"):
+                        st.write(f"**公司**：{report.get('company', '未填写')}")
+                        st.write(f"**国家**：{report.get('country', '未填写')}")
+                        st.write(f"**类别**：{report.get('categories', '')}")
+                        if report.get('amount'):
+                            st.write(f"**金额**：{report.get('currency', '')} {report.get('amount')}")
+                        st.write(f"**经过**：{report.get('narrative', '')}")
+                        col1, col2 = st.columns(2)
+                        if col1.button("✅ 通过收录", key=f"approve_{report['id']}", use_container_width=True):
+                            db.set_status(report['id'], 'approved')
+                            st.success("已通过！")
+                            st.rerun()
+                        if col2.button("❌ 驳回", key=f"reject_{report['id']}", use_container_width=True):
+                            db.set_status(report['id'], 'rejected')
+                            st.info("已驳回。")
+                            st.rerun()
 
         with st.container(border=True):
             st.markdown("#### 申诉 / 纠错队列")
