@@ -167,6 +167,10 @@ def _render_form(db, parsed, uploaded_images=None) -> None:
         consent = st.checkbox(
             "我确认说的是真事，恶意举报要负责任的"
         )
+        publish_screenshots = st.checkbox(
+            "同意公开聊天截图作为证据（选了之后其他用户也能看到你传的截图，不选的话只有管理员能看到）",
+            value=False
+        )
         submitted = st.form_submit_button("提交举报", type="primary", use_container_width=True)
 
     if not submitted:
