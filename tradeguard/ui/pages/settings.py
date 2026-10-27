@@ -66,7 +66,7 @@ def render(db) -> None:
                 # 显示截图
                 if report['evidence']:
                     img_list = report['evidence'].split("|||")
-                    st.image(img_list, width=200)
+                    st.image(img_list, use_container_width=True)
                 col1, col2 = st.columns(2)
                 if col1.button("✅ 通过", key=f"approve_{report['id']}", use_container_width=True):
                     db.set_status(report['id'], 'approved')
