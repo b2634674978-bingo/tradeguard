@@ -26,17 +26,15 @@ def render(db) -> None:
         "补充经过后入库。只保存必要证据，不保存完整聊天原文。",
     )
 
-    if public_mode() and not is_admin():
-        theme.note(
-            "当前是 <strong>公开只读演示版</strong>，暂不开放游客上报，避免未经审核的指控进入公开库。"
-            "管理员可在左侧登录后上报；普通访客可以先查询演示数据。",
-            "warn",
-        )
-        st.caption("公开演示版只应使用虚构数据；真实举报请使用本地完整版或私有部署。")
-        return
-
     if public_mode():
-        st.caption("云端临时存储：应用重启/重新部署后，本页新增的数据可能丢失。请及时在设置中备份。")
+        if is_admin():
+            st.caption("云端临时存储：应用重启/重新部署后，本页新增的数据可能丢失。请及时在设置中备份。")
+        else:
+            theme.note(
+                "你提交的举报会进入<strong>待审核队列</strong>，管理员审核通过后才会公开显示。"
+                "请确保你提交的信息真实、有聊天记录佐证，不要恶意诬告。",
+                "info",
+            )
 
     _render_success_block()
 
@@ -85,7 +83,10 @@ def _render_success_block() -> None:
     success = st.session_state.get("report_success")
     if not success:
         return
-    st.success(f"已收录：{success['label']} · {success['query']}。你可以在「查询验证」里立即查到它。")
+    if is_admin():
+        st.success(f"已收录：{success['label']} · {success['query']}。你可以在「查询验证」里立即查到它。")
+    else:
+        st.success(f"提交成功！你的举报已进入待审核队列。\n\n类别：{success['label']} · 对象：{success['query']}\n\n管理员审核通过后才会公开显示。")
     cols = st.columns([1.5, 1.5, 3.5])
     if cols[0].button("查看风险档案", type="primary", use_container_width=True):
         st.session_state["last_query"] = success["query"]
@@ -95,7 +96,8 @@ def _render_success_block() -> None:
         st.session_state.pop("report_success", None)
         st.session_state.pop("parsed_chat", None)
         st.rerun()
-    st.caption("提示：原型默认提交即收录；你可以在「设置与合规」中复核、导出或删除记录。")
+    if is_admin():
+        st.caption("提示：管理员提交的记录直接公开；你可以在「设置与合规」中复核、导出或删除记录。")
 
 
 def _render_parsed(parsed) -> None:
@@ -263,6 +265,9 @@ def _render_form(db, parsed) -> None:
             st.error(error)
         return
 
+    # 管理员提交的直接通过，普通用户提交的进入待审核
+    report_status = "approved" if is_admin() else "pending"
+
     report_id = db.add_report(
         phones=phones,
         contact_name=contact_name,
@@ -279,6 +284,7 @@ def _render_form(db, parsed) -> None:
         chat_sha256=parsed.sha256 if parsed else None,
         chat_message_count=parsed.message_count if parsed else None,
         credibility=70 if parsed else 55,
+        status=report_status,
     )
 
     query = format_phone(phones[0]) if phones else (company.strip() or contact_name.strip())
