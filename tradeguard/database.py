@@ -824,3 +824,20 @@ class Database:
                 "SELECT * FROM appeals ORDER BY created_at DESC LIMIT ?", (limit,)
             ).fetchall()
             return [dict(row) for row in rows]
+
+    def list_pending_reports(self, limit: int = 20) -> list[dict[str, Any]]:
+        """列出所有待审核的举报"""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM reports WHERE status = 'pending' ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            result = [dict(row) for row in rows]
+            # 再查每个举报对应的号码
+            for report in result:
+                phones = conn.execute(
+                    "SELECT phone_norm FROM report_phones WHERE report_id = ?",
+                    (report["id"],),
+                ).fetchall()
+                report["phones"] = ", ".join([p["phone_norm"] for p in phones])
+            return result
