@@ -48,6 +48,32 @@ def render(db) -> None:
             "管理操作仅对已登录管理员开放。",
             "warn",
         )
+
+    # 待审核队列放在最顶部，一进页面就能看到
+    pending = db.list_pending_reports(20)
+    if pending:
+        st.markdown(f"### 🔔 有 {len(pending)} 条举报待审核")
+        for report in pending:
+            with st.container(border=True):
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.write(f"**#{report['id']}** · {report.get('created_at', '')[:10]}")
+                    st.write(f"联系人：{report.get('contact_name', '未填写')} · 公司：{report.get('company', '未填写')}")
+                    st.write(f"号码：{report.get('phones', '未填写')}")
+                    if report.get('amount'):
+                        st.write(f"金额：{report.get('currency', '')} {report.get('amount')}")
+                    st.write(f"经过：{report.get('narrative', '')[:100]}...")
+                with col2:
+                    if st.button("✅ 通过", key=f"approve_{report['id']}", use_container_width=True):
+                        db.set_status(report['id'], 'approved')
+                        st.success("已通过！")
+                        st.rerun()
+                    if st.button("❌ 驳回", key=f"reject_{report['id']}", use_container_width=True):
+                        db.set_status(report['id'], 'rejected')
+                        st.info("已驳回。")
+                        st.rerun()
+        st.divider()
+
     left, right = st.columns([1, 1])
 
     with left:
