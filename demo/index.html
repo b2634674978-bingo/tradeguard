@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TradeGuard · 外贸防骗情报库</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">🛡️</div>
+        <div>
+          <div class="brand-name">TradeGuard</div>
+          <div class="brand-sub">外贸防骗情报库</div>
+        </div>
+      </div>
+      <div class="side-stats" id="side-stats"></div>
+      <nav id="nav" class="nav">
+        <button type="button" data-view="check">查询验证</button>
+        <button type="button" data-view="report">上报记录</button>
+        <button type="button" data-view="library">情报库</button>
+        <button type="button" data-view="dashboard">数据看板</button>
+        <button type="button" data-view="settings">设置与合规</button>
+      </nav>
+      <label class="privacy">
+        <input type="checkbox" id="privacy-toggle" checked>
+        列表页隐藏完整号码
+      </label>
+      <div class="side-note">
+        本地运行 · 数据不上传<br>
+        风险提示不是判决；无记录也不等于可信。
+      </div>
+    </aside>
+
+    <main class="main">
+      <div id="view"></div>
+      <footer>TradeGuard · 本地优先原型 · 所有记录仅保存在这台电脑上</footer>
+    </main>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="seed.js"></script>
+  <script src="logic.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
