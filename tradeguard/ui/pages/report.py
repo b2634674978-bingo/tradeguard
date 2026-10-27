@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import base64
 from datetime import date
 
 import streamlit as st
@@ -202,6 +203,16 @@ def _render_form(db, parsed, uploaded_images=None) -> None:
     # 管理员提交的直接通过，普通用户提交的进入待审核
     report_status = "approved" if is_admin() else "pending"
 
+    # 把上传的截图转成base64存到evidence字段里
+    evidence_text = ""
+    if uploaded_images and len(uploaded_images) >= 3:
+        img_data_list = []
+        for img in uploaded_images:
+            bytes_data = img.getvalue()
+            b64 = base64.b64encode(bytes_data).decode()
+            img_data_list.append(f"data:image/png;base64,{b64}")
+        evidence_text = "|||".join(img_data_list)
+
     report_id = db.add_report(
         phones=phones,
         contact_name=contact_name,
@@ -212,7 +223,7 @@ def _render_form(db, parsed, uploaded_images=None) -> None:
         currency="USD",
         incident_date=date.today(),
         narrative=narrative,
-        evidence="",
+        evidence=evidence_text,
         source="manual",
         chat_filename=None,
         chat_sha256=None,
