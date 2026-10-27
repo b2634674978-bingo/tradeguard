@@ -27,7 +27,7 @@ def _admin_password() -> str | None:
         value = None
     if value:
         return str(value)
-    env_value = os.environ.get("TRADEGUARD_ADMIN_PASSWORD")
+    env_value = os.environ.get("TRADEGUARD_ADMIN_PASSWORD") or os.environ.get("ADMIN_PASSWORD")
     return env_value or None
 
 
