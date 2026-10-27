@@ -39,8 +39,8 @@ def render(db) -> None:
     _render_success_block()
 
     with st.container(border=True):
-        st.markdown("#### 1 · 上传聊天截图（可选）")
-        st.caption("💡 建议：第一张传对方的个人主页/资料截图（能看到他的号码、名字、公司），后面传关键的聊天记录截图，这样管理员审核的时候能确认是同一个人。最多传3张，系统不会公开你的截图，只留作审核证据。")
+        st.markdown("#### 1 · 上传聊天截图（必填，至少3张）")
+        st.caption("💡 要求：第一张必须是对方的个人主页/资料截图（能看到他的号码、名字、公司），后面2张传关键的聊天记录截图，这样管理员审核的时候能确认是同一个人。系统不会公开你的截图，只留作审核证据。")
         uploaded_images = st.file_uploader(
             "上传聊天截图",
             type=["png", "jpg", "jpeg"],
@@ -48,9 +48,12 @@ def render(db) -> None:
             key="image_upload",
         )
         if uploaded_images:
-            st.success(f"已上传 {len(uploaded_images)} 张截图")
+            if len(uploaded_images) >= 3:
+                st.success(f"已上传 {len(uploaded_images)} 张截图，符合要求")
+            else:
+                st.warning(f"已上传 {len(uploaded_images)} 张，还需要至少 {3 - len(uploaded_images)} 张才能提交")
 
-    _render_form(db, None)
+    _render_form(db, None, uploaded_images)
 
 
 def _render_success_block() -> None:
@@ -128,7 +131,7 @@ def _render_parsed(parsed) -> None:
             )
 
 
-def _render_form(db, parsed) -> None:
+def _render_form(db, parsed, uploaded_images=None) -> None:
     st.markdown('<div class="tg-section-title">2 · 简单填写信息</div>', unsafe_allow_html=True)
 
     with st.form("report_form"):
@@ -184,6 +187,8 @@ def _render_form(db, parsed) -> None:
         errors.append("经过写得太短啦，多写两句。")
     if not consent:
         errors.append("请勾选确认信息真实。")
+    if not uploaded_images or len(uploaded_images) < 3:
+        errors.append("必须至少上传3张截图才能提交（1张对方资料+2张聊天记录）。")
 
     if errors:
         for error in errors:
