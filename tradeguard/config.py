@@ -20,7 +20,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Streamlit Community Cloud 的仓库路径固定为 /mount/src；本地 Windows 不会命中。
 IS_CLOUD = bool(os.environ.get("TRADEGUARD_CLOUD")) or Path("/mount/src").exists()
-PUBLIC_DEMO = os.environ.get("TRADEGUARD_PUBLIC_DEMO") == "1" or IS_CLOUD
+PUBLIC_DEMO = os.environ.get("TRADEGUARD_PUBLIC_DEMO", "1") == "1"
 
 if os.environ.get("TRADEGUARD_DATA_DIR"):
     DATA_DIR = Path(os.environ["TRADEGUARD_DATA_DIR"])
