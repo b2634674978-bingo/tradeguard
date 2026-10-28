@@ -82,6 +82,15 @@ with st.sidebar:
         st.caption(i18n.tr("存储：PostgreSQL · 重启不丢", "Storage: PostgreSQL · survives restarts"))
     else:
         st.caption(i18n.tr("存储：本机 SQLite", "Storage: local SQLite"))
+    # 管理员状态：只读时给出去哪里登录的明确指引
+    if auth.admin_required():
+        if auth.is_admin():
+            st.caption(i18n.tr("权限：管理员已登录", "Access: admin signed in"))
+        else:
+            st.caption(i18n.tr(
+                "权限：只读 · 到「设置与合规」顶部登录管理员",
+                "Access: read-only · sign in under Settings & compliance",
+            ))
     st.caption(i18n.tr("风险提示不是判决；无记录也不等于可信。", "Risk signals are not verdicts; no record does not mean safe."))
 
 

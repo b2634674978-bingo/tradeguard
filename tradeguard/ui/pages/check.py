@@ -9,7 +9,7 @@ import streamlit as st
 from .. import components, theme
 from ..nav import goto
 from ... import i18n
-from ...auth import is_admin
+from ...auth import public_viewer
 
 EXAMPLES = ["+1 555 010 4477", "NovaPeak Supplements", "+44 7700 900123"]
 
@@ -224,7 +224,7 @@ def _render_result(db, query: str) -> None:
             unsafe_allow_html=True,
         )
         for report in text_reports:
-            components.report_card(report, db, public_view=not is_admin())
+            components.report_card(report, db, public_view=public_viewer())
 
     for note in result["notes"]:
         st.caption(note)

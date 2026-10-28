@@ -63,10 +63,9 @@ def render(db) -> None:
         ),
     )
 
-    # 管理员登录入口放在设置页面顶部
-    if public_mode():
-        auth.login_widget()
-        st.markdown("---")
+    # 管理员登录入口固定在设置页顶部：任何环境都显示，避免"找不到入口"
+    auth.login_widget()
+    st.markdown("---")
 
     if not is_admin():
         _render_read_only(db)
@@ -294,8 +293,8 @@ def _render_read_only(db) -> None:
     if admin_configured():
         theme.note(
             i18n.tr(
-                "管理操作已锁定。请在左侧「管理员登录」输入密码后，再备份、导入或清理数据。",
-                "Admin actions are locked. Sign in from the sidebar to back up, import, or clean data.",
+                "管理操作已锁定。请在本页顶部「管理员」区输入密码后，再备份、导入或清理数据。",
+                "Admin actions are locked. Sign in from the Admin section at the top of this page to back up, import, or clean data.",
             ),
             "warn",
         )

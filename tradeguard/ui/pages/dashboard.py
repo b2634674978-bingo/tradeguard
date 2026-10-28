@@ -6,7 +6,7 @@ import streamlit as st
 
 from .. import components, theme
 from ... import i18n
-from ...auth import is_admin
+from ...auth import public_viewer
 
 try:
     import pandas as pd
@@ -99,7 +99,7 @@ def render(db) -> None:
         st.markdown(i18n.tr("#### 最近入库", "#### Recent reports"))
         reports = db.recent_reports(4)
         for report in reports:
-            components.report_card(report, db, public_view=not is_admin())
+            components.report_card(report, db, public_view=public_viewer())
 
     st.caption(i18n.tr(
         f"待复核 {stats['pending']} 条 · 未处理申诉 {stats['appeals']} 条。"

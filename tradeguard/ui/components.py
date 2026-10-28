@@ -8,7 +8,7 @@ from datetime import date
 import streamlit as st
 
 from .. import i18n
-from ..auth import is_admin
+from ..auth import is_admin, public_viewer
 from ..config import APP_TAGLINE, APP_TITLE
 from ..normalize import format_phone, mask_phone
 from ..risk import assess
@@ -97,7 +97,7 @@ def profile_card(profile: dict, db, *, masked: bool = False, show_appeal: bool =
         i18n.tr(f"查看 {len(reports)} 条举报记录与证据", f"View {len(reports)} report(s) and evidence")
     ):
         for report in reports:
-            report_card(report, db, public_view=not is_admin())
+            report_card(report, db, public_view=public_viewer())
         if show_appeal and reports:
             appeal_block(db, reports[0], key_prefix=key_prefix)
 

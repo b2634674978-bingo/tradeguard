@@ -10,7 +10,7 @@ import streamlit as st
 from .. import components, theme
 from ..nav import goto
 from ... import i18n, storage
-from ...auth import is_admin, public_mode
+from ...auth import public_mode, public_viewer
 from ...config import MAX_IMAGES, MAX_IMAGE_BYTES
 from ...constants import CATEGORIES, CATEGORY_KEYS, CATEGORY_LABELS
 from ...normalize import format_phone, normalize_phone
@@ -27,7 +27,7 @@ def render(db) -> None:
     )
 
     if public_mode():
-        if is_admin():
+        if not public_viewer():
             st.caption(i18n.tr(
                 "管理员提交的记录会直接公开；云端重启后数据可能重置，请及时备份。",
                 "Admin reports are published immediately. Cloud data may reset on restart; back up regularly.",
@@ -228,7 +228,7 @@ def _render_form(db, uploaded_images) -> None:
         return
 
     manual_norm = normalize_phone(manual_phone) if manual_phone.strip() else manual_phone.strip()
-    report_status = "approved" if is_admin() else "pending"
+    report_status = "pending" if public_viewer() else "approved"
     report_id = db.add_report(
         phones=[manual_norm] if manual_norm else [],
         contact_name=contact_name,

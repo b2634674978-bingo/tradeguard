@@ -14,6 +14,23 @@ os.environ.setdefault("TRADEGUARD_DATA_DIR", _TMP)
 os.environ.setdefault("TRADEGUARD_DB_PATH", os.path.join(_TMP, "tradeguard.db"))
 
 
+@pytest.fixture(autouse=True)
+def isolate_runtime(monkeypatch):
+    """让测试不读本地 .streamlit/secrets.toml。
+
+    否则开发者一旦配了 DATABASE_URL，测试就会连真实线上库写数据；
+    配了 ADMIN_PASSWORD，页面又会变成只读，测试结果取决于本机配置。
+    这里统一钉死为：本地 SQLite + 未配置管理员密码。
+    """
+    import tradeguard.auth as auth
+    import tradeguard.config as config
+
+    monkeypatch.setattr(config, "DATABASE_URL", "", raising=False)
+    monkeypatch.setattr(config, "IS_POSTGRES", False, raising=False)
+    monkeypatch.setattr(auth, "PUBLIC_DEMO", False, raising=False)
+    monkeypatch.setattr(auth, "_admin_password", lambda: None, raising=False)
+
+
 @pytest.fixture()
 def temp_dir():
     path = BASE / uuid.uuid4().hex
