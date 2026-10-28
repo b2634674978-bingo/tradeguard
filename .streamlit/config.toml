@@ -8,6 +8,17 @@ font = "sans serif"
 
 [server]
 maxUploadSize = 25
+enableXsrfProtection = true
+fileWatcherType = "none"
 
 [browser]
 gatherUsageStats = false
+serverAddress = "0.0.0.0"
+
+[theme]
+base = "light"
+primaryColor = "#0F766E"
+backgroundColor = "#F6F8FB"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#0F172A"
+font = "sans serif"
