@@ -43,18 +43,18 @@ def render(db) -> None:
             "Queries stay on this machine and the subject is not notified."
         )
     theme.hero(
-        i18n.tr("交易前先查一查", "CHECK BEFORE YOU TRADE"),
-        i18n.tr("这个名字，靠谱吗？", "Is this buyer or supplier trustworthy?"),
+        i18n.tr("交易前请核实", "CHECK BEFORE YOU TRADE"),
+        i18n.tr("这个买家或供应商值得信赖吗？", "Is this buyer or supplier trustworthy?"),
         i18n.tr(intro_zh, intro_en),
         tag=i18n.tr(
-            f"已收录 {counts['reports']} 条举报 · 覆盖 {counts['phones']} 个号码",
+            f"{counts['reports']} 份报告 · {counts['phones']} 个数字",
             f"{counts['reports']} reports · {counts['phones']} numbers",
         ),
     )
 
     # 立即上报大按钮，放在最显眼的位置
     if st.button(
-        i18n.tr("📢 立即上报被骗经历", "📢 Report Your Scam Experience"),
+        i18n.tr("📢 举报您的诈骗经历", "📢 Report Your Scam Experience"),
         type="primary",
         use_container_width=True,
     ):
@@ -67,14 +67,14 @@ def render(db) -> None:
         query = columns[0].text_input(
             i18n.tr("查询对象", "Search"),
             placeholder=i18n.tr(
-                "例如：+1 555 010 4477、NovaPeak Supplements、Mike R.",
+                "例如 +1 555 010 4477，NovaPeak Supplements，Mike R.",
                 "e.g. +1 555 010 4477, NovaPeak Supplements, Mike R.",
             ),
             label_visibility="collapsed",
             key="search_query",
         )
         submitted = columns[1].form_submit_button(
-            i18n.tr("立即查询", "Search"),
+            i18n.tr("搜索", "Search"),
             type="primary",
             use_container_width=True,
         )
@@ -86,7 +86,7 @@ def render(db) -> None:
             st.warning(i18n.tr("先输入号码、公司名或联系人。", "Enter a number, company, or contact."))
 
     example_cols = st.columns([1.1, 2.1, 2.7, 2.2, 1.2])
-    example_cols[0].caption(i18n.tr("试试：", "Try:"))
+    example_cols[0].caption(i18n.tr("尝试：", "Try:"))
     for index, example in enumerate(EXAMPLES):
         example_cols[index + 1].button(
             example,
@@ -104,30 +104,30 @@ def render(db) -> None:
 
 
 def _render_intro(db) -> None:
-    theme.section_title(i18n.tr("查询之前，先记住三条", "Three rules before you search"))
+    theme.section_title(i18n.tr("搜索前的三条规则", "Three rules before you search"))
     columns = st.columns(3)
     cards = [
         (
             "🔎",
-            i18n.tr("先查再谈", "Check first"),
+            i18n.tr("先检查", "Check first"),
             i18n.tr(
-                "谈样品、谈价格之前，先用号码和公司名查一遍。30 秒，可能省下几周的样品和时间。",
+                "在讨论样品或价格之前，请先搜索电话号码和公司名称。短短30秒，可能省下几周的样品和时间。",
                 "Search the number and company before discussing samples or pricing. Thirty seconds can save weeks of samples and time.",
             ),
         ),
         (
             "⚖️",
-            i18n.tr("风险提示 ≠ 判决", "A risk flag is not a verdict"),
+            i18n.tr("风险警报并不等同于判决。", "A risk flag is not a verdict"),
             i18n.tr(
-                "单条举报最高只到中风险。请结合多条记录、证据、时间和自己的判断，不要只凭一个分数拉黑客户。",
+                "一份未经核实的报告风险等级最高仅为中等。请结合多条报告、证据、时间和您自己的判断，不要只凭一个分数拉黑客户。",
                 "A single unverified report is capped at medium risk. Review multiple reports, evidence, timing, and your own judgment.",
             ),
         ),
         (
             "🕳️",
-            i18n.tr("无记录 ≠ 可信", "No record does not mean safe"),
+            i18n.tr("没有记录并不代表安全。", "No record does not mean safe"),
             i18n.tr(
-                "骗子会换号、换公司名。没有记录只说明没人报过，验厂、担保、分阶段付款仍然是底线。",
+                "诈骗分子会更换电话号码和公司名称。没有记录仅表示尚未有人举报过。请务必核实工厂并使用托管或分阶段付款。",
                 "Scammers change numbers and company names. No record only means nobody has reported them yet. Keep verifying factories and using escrow or staged payments.",
             ),
         ),
