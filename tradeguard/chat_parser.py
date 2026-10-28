@@ -86,7 +86,8 @@ _SIGNAL_DEFS: list[tuple[str, str, list[str]]] = [
         "free_sample",
         "免费样品",
         ["免费样品", "免费拿样", "样品免费", "样品费免", "不付样品费", "白嫖",
-         "free sample", "sample for free", "no sample fee", "free of charge"],
+         "free sample", "sample for free", "sample is free", "sample should be free",
+         "samples are free", "sample must be free", "no sample fee", "free of charge"],
     ),
     (
         "payment_proof",
@@ -248,7 +249,13 @@ def _parse_timestamp(date_part: str, time_part: str, ampm: str | None) -> dateti
     a, b, c = (int(x) for x in date_match.groups())
     if a > 31:
         year, month, day = a, b, c
+    elif b > 12:
+        # 美式 M/D/Y（如 12/31/25）：第二段超过 12，只能是「日」
+        month, day, year = a, b, c
+        if year < 100:
+            year += 2000
     else:
+        # 其余保持「日/月/年」优先，兼容 WhatsApp 常见的欧式与中文导出
         day, month, year = a, b, c
         if year < 100:
             year += 2000

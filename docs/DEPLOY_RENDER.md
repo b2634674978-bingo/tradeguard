@@ -32,13 +32,14 @@ Render 会自动注入 $PORT；不要写死 8501。
 Render 免费 Web Service 的文件系统是**临时的**：
 
 - 服务重启、重新部署、休眠唤醒后，/tmp 里的 SQLite 会丢失；
-- 现在截图以压缩后的 BLOB 存在同一个 SQLite 文件里，所以截图也会一起丢；
+- 截图以压缩后的 BLOB 存在同一个 SQLite 文件里，所以截图也会一起丢；
 - 免费版不能挂载 Persistent Disk。
 
-临时缓解：
+**根治办法：配 `DATABASE_URL` 走 PostgreSQL（见下方方案 B），重启不再丢数据。**
 
+临时缓解（未配 DATABASE_URL 时）：
 1. 管理员在「设置与合规」定期下载 SQLite 备份；
-2. 需要恢复时，在设置页上传这个 .db 文件（新增的恢复功能）；
+2. 需要恢复时，在设置页上传这个 .db 文件；
 3. 不要把它当长期数据库。
 
 ## 4. 方案 A：Render Persistent Disk（推荐给付费用户）
@@ -57,15 +58,20 @@ Render 免费 Web Service 的文件系统是**临时的**：
 
 这是改动最小、最稳的方案；成本约每月 $7 起（以 Render 官网为准）。
 
-## 5. 方案 B：外部数据库（推荐给长期免费方案）
+## 5. 方案 B：外部数据库（免费长期方案，已实现）
 
-把 SQLite 换成 Supabase / Neon PostgreSQL：
+数据层已改造为双引擎：配置 `DATABASE_URL` 即切到 Supabase / Neon PostgreSQL，业务代码与页面无需改动。
 
-- 优点：免费额度通常够用，数据独立于 Render 实例；
-- 缺点：需要改数据层（当前代码是 sqlite3 原生 SQL），并把截图放到对象存储或 bytea；
-- 建议：先选 Supabase（免费 500 MB 数据库 + 1 GB 存储），我可以下一步改成 Postgres + Storage。
+- 优点：免费额度通常够用，数据独立于 Render 实例，重启/休眠/重新部署都不丢；
+- 截图仍以二进制存库（Postgres 用 `BYTEA`），单张已压缩到 1600px / JPEG 85；
+- 完整步骤见 **[Postgres 持久化指南](DEPLOY_POSTGRES.md)**（建库、连接串端口选择、自检脚本、数据迁移、备份）。
 
-在没改完之前，不要直接把 Render 免费版当正式数据库。
+快速路径：
+
+1. Supabase / Neon 建库，复制连接串（Render 环境建议用 Supabase 6543 事务池化端口）；
+2. Render Environment 加 `DATABASE_URL`；
+3. 本地跑 `python scripts/pg_selfcheck.py` 验证；
+4. 有存量数据则跑 `python scripts/migrate_sqlite_to_pg.py --apply`。
 
 ## 6. 用 render.yaml 重建服务（可选）
 

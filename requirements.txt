@@ -3,3 +3,6 @@
 streamlit>=1.57,<2.0
 pandas>=2.2,<4.0
 Pillow>=10,<14
+
+# Postgres 持久化（配置 DATABASE_URL 时启用；不配则走本地 SQLite，不会加载）
+psycopg[binary]>=3.2,<4.0

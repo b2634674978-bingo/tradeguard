@@ -74,14 +74,24 @@ def render(db) -> None:
 
     counts = db.quick_counts()
     if public_mode():
-        theme.note(
-            i18n.tr(
-                "当前是<strong>公开演示部署</strong>。SQLite 位于云端临时目录，应用重启/重新部署会重置；"
-                "管理操作仅对已登录管理员开放。",
-                "This is a <strong>public demo deployment</strong>. SQLite lives in temporary storage and resets on restart; admin actions are locked.",
-            ),
-            "warn",
-        )
+        if db.is_postgres:
+            theme.note(
+                i18n.tr(
+                    "当前是<strong>公开演示部署</strong>，数据存放在 PostgreSQL，重启/重新部署不会丢失；"
+                    "管理操作仅对已登录管理员开放。",
+                    "This is a <strong>public demo deployment</strong> backed by PostgreSQL, so data survives restarts; admin actions are locked.",
+                ),
+                "info",
+            )
+        else:
+            theme.note(
+                i18n.tr(
+                    "当前是<strong>公开演示部署</strong>。SQLite 位于云端临时目录，应用重启/重新部署会重置；"
+                    "管理操作仅对已登录管理员开放。",
+                    "This is a <strong>public demo deployment</strong>. SQLite lives in temporary storage and resets on restart; admin actions are locked.",
+                ),
+                "warn",
+            )
 
     # 待审核队列：图片以 BLOB 存储，用 st.image 完整显示
     pending = db.list_pending_reports(30)
@@ -139,14 +149,7 @@ def render(db) -> None:
                 f"当前：**{counts['reports']}** 条举报 · **{counts['phones']}** 个号码 · **{counts['pending']}** 条待复核",
                 f"**{counts['reports']}** reports · **{counts['phones']}** numbers · **{counts['pending']}** pending",
             ))
-            st.caption(i18n.tr(f"数据库位置：{db.path}", f"Database: {db.path}"))
-            st.download_button(
-                i18n.tr("下载 SQLite 备份", "Download SQLite backup"),
-                data=db.backup_bytes(),
-                file_name=f"tradeguard-backup-{date.today().isoformat()}.db",
-                mime="application/octet-stream",
-                use_container_width=True,
-            )
+            st.caption(i18n.tr(f"存储引擎：{db.location}", f"Storage engine: {db.location}"))
             st.download_button(
                 i18n.tr("导出全部记录 CSV", "Export all CSV"),
                 data=db.export_csv(),
@@ -155,42 +158,57 @@ def render(db) -> None:
                 use_container_width=True,
             )
 
-            st.divider()
-            st.markdown(i18n.tr("**恢复 SQLite 备份**", "**Restore SQLite backup**"))
-            st.caption(i18n.tr(
-                "上传之前下载的 .db 文件；会覆盖当前数据库和截图。",
-                "Upload a previously downloaded .db file. This replaces the current database and screenshots.",
-            ))
-            backup_file = st.file_uploader(
-                i18n.tr("选择 .db 备份", "Choose .db backup"),
-                type=["db"],
-                key="db_restore",
-            )
-            confirm_restore = st.checkbox(
-                i18n.tr("我确认覆盖当前数据", "I understand this overwrites current data"),
-                key="db_restore_confirm",
-            )
-            if backup_file is not None and st.button(
-                i18n.tr("覆盖恢复数据", "Restore backup"),
-                disabled=not confirm_restore,
-                use_container_width=True,
-            ):
-                raw_backup = backup_file.getvalue()
-                if len(raw_backup) > 200 * 1024 * 1024:
-                    st.error(i18n.tr("备份文件超过 200 MB。", "Backup exceeds 200 MB."))
-                elif not raw_backup.startswith(b"SQLite format 3\x00"):
-                    st.error(i18n.tr("这不是有效的 SQLite 备份文件。", "This is not a valid SQLite backup."))
-                else:
-                    try:
-                        db.path.write_bytes(raw_backup)
-                        db.init()
-                    except Exception as exc:  # noqa: BLE001
-                        st.error(i18n.tr(f"恢复失败：{exc}", f"Restore failed: {exc}"))
+            if db.supports_file_backup:
+                st.download_button(
+                    i18n.tr("下载 SQLite 备份", "Download SQLite backup"),
+                    data=db.backup_bytes(),
+                    file_name=f"tradeguard-backup-{date.today().isoformat()}.db",
+                    mime="application/octet-stream",
+                    use_container_width=True,
+                )
+
+                st.divider()
+                st.markdown(i18n.tr("**恢复 SQLite 备份**", "**Restore SQLite backup**"))
+                st.caption(i18n.tr(
+                    "上传之前下载的 .db 文件；会覆盖当前数据库和截图。",
+                    "Upload a previously downloaded .db file. This replaces the current database and screenshots.",
+                ))
+                backup_file = st.file_uploader(
+                    i18n.tr("选择 .db 备份", "Choose .db backup"),
+                    type=["db"],
+                    key="db_restore",
+                )
+                confirm_restore = st.checkbox(
+                    i18n.tr("我确认覆盖当前数据", "I understand this overwrites current data"),
+                    key="db_restore_confirm",
+                )
+                if backup_file is not None and st.button(
+                    i18n.tr("覆盖恢复数据", "Restore backup"),
+                    disabled=not confirm_restore,
+                    use_container_width=True,
+                ):
+                    raw_backup = backup_file.getvalue()
+                    if len(raw_backup) > 200 * 1024 * 1024:
+                        st.error(i18n.tr("备份文件超过 200 MB。", "Backup exceeds 200 MB."))
                     else:
-                        st.success(i18n.tr(
-                            "已恢复备份，请刷新页面后生效。",
-                            "Backup restored. Refresh the page to load it.",
-                        ))
+                        try:
+                            db.restore_from_bytes(raw_backup)
+                        except Exception as exc:  # noqa: BLE001
+                            st.error(i18n.tr(f"恢复失败：{exc}", f"Restore failed: {exc}"))
+                        else:
+                            st.success(i18n.tr(
+                                "已恢复备份，请刷新页面后生效。",
+                                "Backup restored. Refresh the page to load it.",
+                            ))
+            else:
+                st.divider()
+                st.markdown(i18n.tr("**备份（PostgreSQL）**", "**Backup (PostgreSQL)**"))
+                st.caption(i18n.tr(
+                    "当前使用 PostgreSQL，整库备份请在 Supabase / Neon 控制台开启自动备份，"
+                    "或用 pg_dump 导出；本页仍可导出 CSV 作为人工存档。",
+                    "This deployment uses PostgreSQL. Use Supabase/Neon automated backups or pg_dump; "
+                    "CSV export remains available here as a manual archive.",
+                ))
 
         with st.container(border=True):
             st.markdown(i18n.tr("#### 批量导入", "#### Bulk import"))
@@ -295,12 +313,20 @@ def _render_read_only(db) -> None:
         f"演示库当前有 **{counts['reports']}** 条举报、**{counts['phones']}** 个号码。",
         f"The demo has **{counts['reports']}** reports and **{counts['phones']}** numbers.",
     ))
-    st.caption(i18n.tr(
-        "免费版文件系统是临时的：应用休眠、重启或重新部署后，新增数据可能丢失。"
-        "公开演示版请只使用虚构数据；真实数据请使用本地版或私有部署。",
-        "Free-tier storage is temporary: data may reset when the app sleeps, restarts, or redeploys. "
-        "Use fictional data in public demos; use a local or private deployment for real reports.",
-    ))
+    if db.is_postgres:
+        st.caption(i18n.tr(
+            "数据存放在 PostgreSQL，应用休眠、重启或重新部署后不会丢失。"
+            "公开演示版请只使用虚构数据；真实数据请使用私有部署。",
+            "Data lives in PostgreSQL and survives sleeps, restarts, and redeploys. "
+            "Use fictional data in public demos; use a private deployment for real reports.",
+        ))
+    else:
+        st.caption(i18n.tr(
+            "免费版文件系统是临时的：应用休眠、重启或重新部署后，新增数据可能丢失。"
+            "配置 DATABASE_URL 切换到 PostgreSQL 即可持久保存。",
+            "Free-tier storage is temporary: data may reset when the app sleeps, restarts, or redeploys. "
+            "Set DATABASE_URL to switch to PostgreSQL for persistence.",
+        ))
     st.markdown(i18n.tr("#### 合规边界", "#### Compliance boundaries"))
     st.markdown(COMPLIANCE_TEXT_EN if i18n.lang() == "en" else COMPLIANCE_TEXT)
     st.caption(i18n.tr(

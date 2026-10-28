@@ -1,4 +1,11 @@
-"""本地 SQLite 数据层：举报记录、号码索引、查询聚合、统计与导入导出。"""
+"""数据层：举报记录、号码索引、查询聚合、统计与导入导出。
+
+同一份业务逻辑跑两种后端：
+- 本地 / 离线 / 单元测试：SQLite（默认）
+- 云端持久化：PostgreSQL（设置 DATABASE_URL 后自动启用）
+
+方言差异全部收敛在 dbdriver.py，本文件只写标准 SQL。
+"""
 
 from __future__ import annotations
 
@@ -6,9 +13,7 @@ import csv
 import io
 import json
 import re
-import sqlite3
 from collections import Counter
-from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterable
@@ -21,6 +26,7 @@ from .constants import (
     REPORT_STATUS,
     SOURCES,
 )
+from .dbdriver import DatabaseBackend, make_backend, split_statements
 from .normalize import (
     company_key,
     digits_only,
@@ -33,16 +39,17 @@ from .normalize import (
 from .risk import assess
 from .seed import demo_reports
 
+# 建表模板：{pk} / {blob} / {real} 由后端方言填充
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS reports (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id {pk},
     created_at TEXT NOT NULL,
     incident_date TEXT,
     contact_name TEXT NOT NULL DEFAULT '',
     company TEXT NOT NULL DEFAULT '',
     country TEXT NOT NULL DEFAULT '',
     categories TEXT NOT NULL,
-    amount REAL,
+    amount {real},
     currency TEXT NOT NULL DEFAULT 'USD',
     narrative TEXT NOT NULL DEFAULT '',
     evidence TEXT NOT NULL DEFAULT '',
@@ -57,7 +64,7 @@ CREATE TABLE IF NOT EXISTS reports (
 );
 
 CREATE TABLE IF NOT EXISTS report_phones (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id {pk},
     report_id INTEGER NOT NULL,
     phone_norm TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'subject',
@@ -69,10 +76,10 @@ CREATE INDEX IF NOT EXISTS idx_report_phones_norm ON report_phones(phone_norm);
 CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status);
 
 CREATE TABLE IF NOT EXISTS report_images (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id {pk},
     report_id INTEGER NOT NULL,
     mime TEXT NOT NULL,
-    data BLOB NOT NULL,
+    data {blob} NOT NULL,
     size INTEGER NOT NULL DEFAULT 0,
     sort_order INTEGER NOT NULL DEFAULT 0,
     is_public INTEGER NOT NULL DEFAULT 0,
@@ -83,7 +90,7 @@ CREATE TABLE IF NOT EXISTS report_images (
 CREATE INDEX IF NOT EXISTS idx_report_images_report ON report_images(report_id);
 
 CREATE TABLE IF NOT EXISTS appeals (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id {pk},
     report_id INTEGER,
     phone_norm TEXT,
     message TEXT NOT NULL,
@@ -96,6 +103,17 @@ CREATE TABLE IF NOT EXISTS meta (
     value TEXT
 );
 """
+
+
+def schema_statements(backend: DatabaseBackend) -> list[str]:
+    """按后端方言渲染建表语句列表。"""
+    script = SCHEMA.format(
+        pk=backend.pk_type,
+        blob=backend.blob_type,
+        real=backend.real_type,
+    )
+    return split_statements(script)
+
 
 
 def _now() -> str:
@@ -124,31 +142,47 @@ def _clean_date(value: Any) -> str | None:
 
 
 class Database:
-    def __init__(self, path: str | Path | None = None):
-        self.path = Path(path) if path else config.DB_PATH
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+    def __init__(
+        self,
+        path: str | Path | None = None,
+        *,
+        database_url: str | None = None,
+    ):
+        # 显式传 path 时强制 SQLite（测试与本地脚本依赖这一约定）
+        self.backend = make_backend(
+            path,
+            database_url if database_url is not None else config.DATABASE_URL,
+        )
+        self.path = Path(path) if path else (config.DB_PATH if self.backend.name == "sqlite" else None)
         self.init()
 
     # ------------------------------------------------------------ 连接与建表
 
-    @contextmanager
+    @property
+    def engine(self) -> str:
+        return self.backend.name
+
+    @property
+    def is_postgres(self) -> bool:
+        return self.backend.name == "postgres"
+
+    @property
+    def supports_file_backup(self) -> bool:
+        """只有 SQLite 能整库下载成 .db；Postgres 走平台备份。"""
+        return bool(self.backend.supports_file_backup and self.path is not None)
+
+    @property
+    def location(self) -> str:
+        return self.backend.describe()
+
     def _connect(self):
-        conn = sqlite3.connect(str(self.path), timeout=20)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
-        try:
-            yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+        return self.backend.connect()
 
     def init(self) -> None:
         with self._connect() as conn:
-            conn.executescript(SCHEMA)
-            columns = {row["name"] for row in conn.execute("PRAGMA table_info(reports)")}
+            for statement in schema_statements(self.backend):
+                conn.execute(statement)
+            columns = self.backend.columns(conn, "reports")
             if "publish_screenshots" not in columns:
                 conn.execute(
                     "ALTER TABLE reports ADD COLUMN publish_screenshots INTEGER NOT NULL DEFAULT 0"
@@ -174,7 +208,7 @@ class Database:
             )
             return inserted
 
-    def _migrate_legacy_images(self, conn: sqlite3.Connection) -> None:
+    def _migrate_legacy_images(self, conn: Any) -> None:
         """把旧版本塞在 evidence 里的 base64 截图迁移到 report_images（BLOB）。"""
         done = conn.execute(
             "SELECT value FROM meta WHERE key = 'images_migrated'"
@@ -203,7 +237,7 @@ class Database:
                         (report_id, mime, data, size, sort_order, is_public, created_at)
                     VALUES (?, ?, ?, ?, ?, 0, ?)
                     """,
-                    (report_id, mime, sqlite3.Binary(data), len(data), order, _now()),
+                    (report_id, mime, data, len(data), order, _now()),
                 )
                 saved += 1
             if saved:
@@ -258,7 +292,7 @@ class Database:
                 created_at=created_at,
             )
 
-    def _insert_report(self, conn: sqlite3.Connection, **kwargs: Any) -> int:
+    def _insert_report(self, conn: Any, **kwargs: Any) -> int:
         phones: list[str] = []
         for raw in kwargs.get("phones") or []:
             norm = normalize_phone(raw)
@@ -296,37 +330,36 @@ class Database:
         publish_screenshots = 1 if kwargs.get("publish_screenshots") else 0
         created_at = kwargs.get("created_at") or _now()
 
-        cursor = conn.execute(
-            """
+        insert_sql = """
             INSERT INTO reports (
                 created_at, incident_date, contact_name, company, country, categories,
                 amount, currency, narrative, evidence, source, chat_filename,
                 chat_sha256, chat_message_count, credibility, status,
                 publish_screenshots, reporter_hash
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                created_at,
-                _clean_date(kwargs.get("incident_date")),
-                contact_name,
-                company,
-                country,
-                json.dumps(categories, ensure_ascii=False),
-                amount_value,
-                (kwargs.get("currency") or "USD").strip()[:10] or "USD",
-                (kwargs.get("narrative") or "").strip()[:5000],
-                (kwargs.get("evidence") or "").strip()[:5000],
-                source,
-                (kwargs.get("chat_filename") or None),
-                (kwargs.get("chat_sha256") or None),
-                kwargs.get("chat_message_count"),
-                credibility,
-                status,
-                publish_screenshots,
-                None,
-            ),
+            """
+        insert_params = (
+            created_at,
+            _clean_date(kwargs.get("incident_date")),
+            contact_name,
+            company,
+            country,
+            json.dumps(categories, ensure_ascii=False),
+            amount_value,
+            (kwargs.get("currency") or "USD").strip()[:10] or "USD",
+            (kwargs.get("narrative") or "").strip()[:5000],
+            (kwargs.get("evidence") or "").strip()[:5000],
+            source,
+            (kwargs.get("chat_filename") or None),
+            (kwargs.get("chat_sha256") or None),
+            kwargs.get("chat_message_count"),
+            credibility,
+            status,
+            publish_screenshots,
+            None,
         )
-        report_id = int(cursor.lastrowid)
+        # SQLite 走 lastrowid，Postgres 自动追加 RETURNING id
+        report_id = int(conn.insert_id(insert_sql, insert_params))
         for norm in phones:
             conn.execute(
                 "INSERT OR IGNORE INTO report_phones (report_id, phone_norm, role) VALUES (?, ?, 'subject')",
@@ -353,7 +386,7 @@ class Database:
                     (
                         report_id,
                         mime,
-                        sqlite3.Binary(data),
+                        data,
                         len(data),
                         order,
                         is_public,
@@ -398,11 +431,13 @@ class Database:
         if len(text) < 5:
             raise ValueError("申诉说明至少写 5 个字。")
         with self._connect() as conn:
-            cursor = conn.execute(
-                "INSERT INTO appeals (report_id, phone_norm, message, created_at, status) VALUES (?, ?, ?, ?, 'open')",
-                (report_id, phone_norm, text[:2000], _now()),
+            return int(
+                conn.insert_id(
+                    "INSERT INTO appeals (report_id, phone_norm, message, created_at, status) "
+                    "VALUES (?, ?, ?, ?, 'open')",
+                    (report_id, phone_norm, text[:2000], _now()),
+                )
             )
-            return int(cursor.lastrowid)
 
     # ------------------------------------------------------------ 读取
 
@@ -431,7 +466,7 @@ class Database:
 
     def _images_map(
         self,
-        conn: sqlite3.Connection,
+        conn: Any,
         report_ids: list[int],
         *,
         public_only: bool = False,
@@ -462,7 +497,7 @@ class Database:
             )
         return mapping
 
-    def _phones_map(self, conn: sqlite3.Connection, report_ids: list[int]) -> dict[int, list[str]]:
+    def _phones_map(self, conn: Any, report_ids: list[int]) -> dict[int, list[str]]:
         if not report_ids:
             return {}
         qmarks = ",".join("?" for _ in report_ids)
@@ -476,7 +511,7 @@ class Database:
         return mapping
 
     @staticmethod
-    def _row_to_report(row: sqlite3.Row, phones: dict[int, list[str]]) -> dict[str, Any]:
+    def _row_to_report(row: Any, phones: dict[int, list[str]]) -> dict[str, Any]:
         try:
             categories = json.loads(row["categories"] or "[]")
         except (TypeError, json.JSONDecodeError):
@@ -515,12 +550,14 @@ class Database:
             phones = self._phones_map(conn, [report_id])
             return self._row_to_report(row, phones)
 
-    def _reports_for_phone(self, conn: sqlite3.Connection, phone_norm: str) -> list[dict[str, Any]]:
+    def _reports_for_phone(self, conn: Any, phone_norm: str) -> list[dict[str, Any]]:
+        # 用子查询而不是 SELECT DISTINCT：Postgres 要求 DISTINCT 查询的 ORDER BY
+        # 表达式必须出现在选择列表中，SQLite 则不限，这里绕开该方言差异。
         rows = conn.execute(
             """
-            SELECT DISTINCT r.* FROM reports r
-            JOIN report_phones rp ON rp.report_id = r.id
-            WHERE rp.phone_norm = ? AND r.status = 'approved'
+            SELECT r.* FROM reports r
+            WHERE r.status = 'approved'
+              AND r.id IN (SELECT rp.report_id FROM report_phones rp WHERE rp.phone_norm = ?)
             ORDER BY COALESCE(r.incident_date, r.created_at) DESC
             """,
             (phone_norm,),
@@ -977,7 +1014,28 @@ class Database:
         return {"imported": imported, "skipped": skipped, "errors": errors[:10]}
 
     def backup_bytes(self) -> bytes:
+        """整库下载（仅 SQLite）。Postgres 请用平台备份或 CSV 导出。"""
+        if not self.supports_file_backup or self.path is None:
+            raise RuntimeError("当前使用 PostgreSQL，无法导出 .db 文件；请使用 CSV 导出或平台备份。")
         return self.path.read_bytes()
+
+    def restore_from_bytes(self, raw: bytes) -> None:
+        """用上传的 .db 覆盖当前库（仅 SQLite）。"""
+        if not self.supports_file_backup or self.path is None:
+            raise RuntimeError("当前使用 PostgreSQL，无法用 .db 备份覆盖数据。")
+        if not raw.startswith(b"SQLite format 3\x00"):
+            raise ValueError("这不是有效的 SQLite 备份文件")
+        self.path.write_bytes(raw)
+        self.init()
+
+    def export_rows(self, limit: int = 5000) -> list[dict[str, Any]]:
+        """与引擎无关的全量导出（Postgres 模式下的备份兜底）。"""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM reports ORDER BY COALESCE(incident_date, created_at) DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            return [dict(row) for row in rows]
 
     def quick_counts(self) -> dict[str, int]:
         with self._connect() as conn:

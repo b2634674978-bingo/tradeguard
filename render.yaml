@@ -8,5 +8,8 @@ services:
     envVars:
       - key: ADMIN_PASSWORD
         sync: false
+      # 填上 Supabase / Neon 的连接串后，数据写入 PostgreSQL，重启不再重置
+      - key: DATABASE_URL
+        sync: false
       - key: TRADEGUARD_PUBLIC_DEMO
         value: "1"

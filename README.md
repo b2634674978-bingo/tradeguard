@@ -4,7 +4,7 @@
 
 TradeGuard 是一个**交易前风险提示**原型：把受骗者上传的截图和经过，整理成「号码 + 问题类型 + 经过 + 截图证据」，经管理员审核后聚合成可查询的风险档案。下次有人来谈样品、谈大货，先输入号码或公司名查一查。
 
-本地版数据保存在本机 SQLite；Render/Streamlit Cloud 版使用云端临时 SQLite，重启/重新部署后可能重置。
+存储双引擎：**默认本地 SQLite**（零配置、数据不出本机）；配置 `DATABASE_URL` 后自动切到 **PostgreSQL**，云端重启/重新部署不再丢数据。业务代码与页面无需改动。
 
 > **想先看一眼？** 直接双击 [demo/index.html](demo/index.html)，零安装、零依赖，浏览器打开就能查询、上报、看板。完整版（SQLite + CSV 导入导出 + 申诉队列）见下方启动方式。
 
@@ -27,7 +27,8 @@ TradeGuard 想做的是**交易前的风险提示层**：不替代验厂、不�
 - **号码归一与匹配**：兼容 +86 / 0086 / 空格 / 括号等写法；支持完整号码、尾号 8 位、公司名、联系人查询；
 - **风险评分**：按举报次数、问题类型、时效、证据、金额、可信度计算，并展示每条依据；
 - **中英文切换**：侧边栏「语言 / Language」切换中文 / English；
-- **情报库 / 看板 / 导出**：筛选、CSV 导出、SQLite 备份与恢复；
+- **情报库 / 看板 / 导出**：筛选、CSV 导出；SQLite 模式支持整库备份与恢复，Postgres 模式走平台备份；
+- **双引擎存储**：同一套 SQL 跑 SQLite 与 PostgreSQL，方言差异集中在 `dbdriver.py`；
 - **管理员权限**：ADMIN_PASSWORD 环境变量或 Secrets；普通访客只读查询，不能审核/清空/导出。
 
 ## 零安装演示版（1 分钟）
@@ -38,13 +39,21 @@ TradeGuard 想做的是**交易前的风险提示层**：不替代验厂、不�
 
 ## 部署到 Render.com（当前线上）
 
-项目已包含 render.yaml。Render 免费版文件系统是临时的；管理员密码必须通过环境变量 ADMIN_PASSWORD 配置，代码不再硬编码。完整步骤和持久化方案见 **[Render 部署指南](docs/DEPLOY_RENDER.md)**。
+项目已包含 render.yaml。Render 免费版文件系统是临时的，因此**强烈建议配置 `DATABASE_URL` 走 PostgreSQL**：
+
+| 环境变量 | 作用 |
+|---|---|
+| `ADMIN_PASSWORD` | 管理员密码（必填，代码不再硬编码） |
+| `DATABASE_URL` | 填了即启用 PostgreSQL 持久化；不填回落临时 SQLite |
+| `TRADEGUARD_PUBLIC_DEMO` | `1` = 公开只读演示 |
+
+完整步骤见 **[Render 部署指南](docs/DEPLOY_RENDER.md)** 与 **[Postgres 持久化指南](docs/DEPLOY_POSTGRES.md)**。
 
 ## 部署到 Streamlit Community Cloud
 
 项目已适配 Streamlit Cloud：云端自动使用 /tmp 临时 SQLite、默认公开只读、管理员密码保护写操作。完整步骤见 **[部署指南](docs/DEPLOY_STREAMLIT_CLOUD.md)**。
 
-> 注意：免费版文件系统是临时的，重启/重新部署会重置数据；公开演示请只放虚构数据。真实举报建议用私有应用或本地完整版。
+> 注意：免费版文件系统是临时的，重启/重新部署会重置数据。在 App Settings → Secrets 里加 `DATABASE_URL` 即可改用 PostgreSQL 持久化；公开演示请只放虚构数据。
 
 ## 完整版启动（3 分钟）
 
@@ -96,12 +105,19 @@ TradeGuard 想做的是**交易前的风险提示层**：不替代验厂、不�
         normalize.py             号码/公司名归一、脱敏
         chat_parser.py           WhatsApp 导出解析（旧版能力，保留兼容）
         risk.py                  可解释的风险评分
-        database.py              SQLite 数据层与查询聚合
+        database.py              数据层与查询聚合（写标准 SQL，不感知方言）
+        dbdriver.py              SQLite / PostgreSQL 方言兼容层与连接池
+        storage.py               截图压缩、旧版 base64 解码
+        i18n.py                  中英文文案
         seed.py                  虚构演示数据
         ui/                      主题、组件、五个页面
+      scripts/
+        pg_selfcheck.py          真实 Postgres 端到端自检（9 项关键路径）
+        pg_fullcheck.py          真实 Postgres 全方法校验（24 个公开方法）
+        migrate_sqlite_to_pg.py  SQLite → Postgres 数据迁移
       demo/                      零安装单页演示版（HTML/CSS/JS）
       tests/                     pytest 测试
-      docs/                      产品方案、合规、插件设计
+      docs/                      产品方案、合规、插件设计、部署指南
       data/                      本地数据库（gitignore）
       requirements.txt
 
@@ -110,6 +126,13 @@ TradeGuard 想做的是**交易前的风险提示层**：不替代验厂、不�
     cd tradeguard
     python -m pip install -r requirements-dev.txt
     python -m pytest
+
+测试默认只跑 SQLite（不需要数据库服务）。要验证 Postgres 链路：
+
+    python scripts/pg_selfcheck.py    # 9 项关键路径，需先设置 DATABASE_URL
+    python scripts/pg_fullcheck.py    # 24 个公开方法全覆盖，结束时自清理
+
+两个脚本都支持把连接串作为第一个参数直接传入。2026-10-28 已在 Neon 真库上跑通：9/9、24/24。
 
 ## 路线图
 
@@ -126,7 +149,9 @@ TradeGuard 想做的是**交易前的风险提示层**：不替代验厂、不�
 - [市场与竞品调研](docs/MARKET_RESEARCH.md)
 - [Streamlit Cloud 部署指南](docs/DEPLOY_STREAMLIT_CLOUD.md)
 - [Render.com 部署与持久化](docs/DEPLOY_RENDER.md)
-- [本次修改说明（2026-10-28）](docs/CHANGELOG-2026-10-28.md)
+- [Postgres 持久化指南（Supabase / Neon）](docs/DEPLOY_POSTGRES.md)
+- [修改说明：截图/审核/双语（2026-10-28）](docs/CHANGELOG-2026-10-28.md)
+- [修改说明：Postgres 持久化（2026-10-28）](docs/CHANGELOG-2026-10-28-postgres.md)
 
 ## 边界声明
 

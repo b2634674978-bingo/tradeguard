@@ -63,12 +63,25 @@ with st.sidebar:
         st.checkbox(i18n.tr("列表页隐藏完整号码", "Mask numbers in lists"), value=True, key="privacy_mode")
     if auth.public_mode():
         st.markdown("---")
-        auth.login_widget()
-        st.markdown("---")
-        st.caption(i18n.tr("公开演示 · 数据可能随应用重启重置", "Public demo · data may reset on restart"))
+        if db.is_postgres:
+            st.caption(i18n.tr("公开演示 · 数据持久保存", "Public demo · data is persisted"))
+        else:
+            st.caption(i18n.tr("公开演示 · 数据可能随应用重启重置", "Public demo · data may reset on restart"))
     else:
         st.markdown("---")
-        st.caption(i18n.tr("本地运行 · 数据不上传云端", "Runs locally · data stays on your machine"))
+        if db.is_postgres:
+            st.caption(
+                i18n.tr(
+                    "自建部署 · 数据存于你的 PostgreSQL（不经过第三方）",
+                    "Self-hosted · data lives in your own PostgreSQL",
+                )
+            )
+        else:
+            st.caption(i18n.tr("本地运行 · 数据不上传云端", "Runs locally · data stays on your machine"))
+    if db.is_postgres:
+        st.caption(i18n.tr("存储：PostgreSQL · 重启不丢", "Storage: PostgreSQL · survives restarts"))
+    else:
+        st.caption(i18n.tr("存储：本机 SQLite", "Storage: local SQLite"))
     st.caption(i18n.tr("风险提示不是判决；无记录也不等于可信。", "Risk signals are not verdicts; no record does not mean safe."))
 
 
@@ -82,7 +95,12 @@ RENDERERS = {
 
 RENDERERS[page](db)
 
-if config.IS_CLOUD:
+if db.is_postgres:
+    footer_note = i18n.tr(
+        "TradeGuard · PostgreSQL 持久化 · 记录跨重启保留",
+        "TradeGuard · PostgreSQL backed · records survive restarts",
+    )
+elif config.IS_CLOUD:
     footer_note = i18n.tr(
         "TradeGuard · 云端演示版 · SQLite 数据为临时存储，应用重启后会重置",
         "TradeGuard · Cloud demo · SQLite storage is temporary and resets on restart",

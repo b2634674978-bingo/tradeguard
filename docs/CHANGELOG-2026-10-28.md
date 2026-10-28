@@ -33,7 +33,7 @@
 
 ## 5. 安全：移除硬编码管理员密码（重要）
 
-- 删除 auth.py 里的 TradeGuard2026!Admin123；
+- 删除 auth.py 里的 TradeGuard2026!***（已失效，勿再使用）；
 - 管理员密码只从 st.secrets 或环境变量读取：
   - 优先 st.secrets["ADMIN_PASSWORD"]
   - 其次 ADMIN_PASSWORD

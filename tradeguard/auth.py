@@ -22,7 +22,22 @@ def public_mode() -> bool:
 
 
 def _admin_password() -> str | None:
-    return "TradeGuard2026!Admin123"
+    """管理员密码只从 Secrets 或环境变量读取，禁止硬编码。
+
+    优先级：st.secrets["ADMIN_PASSWORD"] > 环境变量 ADMIN_PASSWORD
+            > 环境变量 TRADEGUARD_ADMIN_PASSWORD
+    """
+    try:
+        value = st.secrets.get("ADMIN_PASSWORD")
+    except Exception:  # 没有 secrets.toml 或不在 Streamlit 上下文
+        value = None
+    if value:
+        return str(value)
+    for name in ("ADMIN_PASSWORD", "TRADEGUARD_ADMIN_PASSWORD"):
+        env_value = os.environ.get(name)
+        if env_value:
+            return env_value
+    return None
 
 
 def admin_configured() -> bool:
@@ -63,14 +78,14 @@ def login_widget() -> None:
 
     if is_admin():
         st.success(i18n.tr("管理员模式", "Admin mode"))
-        if st.button(i18n.tr("退出管理员", "Log out"), key="tg_admin_logout", use_container_width=True):
+        if st.button(i18n.tr("退出管理员", "Log out"), key="tg_admin_logout_" + str(id(st)), use_container_width=True):
             st.session_state["tg_admin"] = False
             st.rerun()
         return
 
     with st.expander("🔐 " + i18n.tr("管理员登录", "Admin login"), expanded=True):
-        password = st.text_input(i18n.tr("管理员密码", "Admin password"), type="password", key="tg_admin_password")
-        if st.button(i18n.tr("登录", "Sign in"), key="tg_admin_login", use_container_width=True):
+        password = st.text_input(i18n.tr("管理员密码", "Admin password"), type="password", key="tg_admin_password_" + str(id(st)))
+        if st.button(i18n.tr("登录", "Sign in"), key="tg_admin_login_" + str(id(st)), use_container_width=True):
             if verify_password(password):
                 st.session_state["tg_admin"] = True
                 st.rerun()

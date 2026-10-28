@@ -24,15 +24,28 @@ def render(db) -> None:
     last_query = (st.session_state.get("last_query") or "").strip()
     if "search_query" not in st.session_state:
         st.session_state["search_query"] = last_query
+    if getattr(db, "is_postgres", False):
+        intro_zh = (
+            "输入 WhatsApp 号码、公司名或联系人，查一查情报库里的历史举报。"
+            "数据存放在本服务自建的 PostgreSQL 中，查询本身不会通知对方。"
+        )
+        intro_en = (
+            "Search a WhatsApp number, company, or contact against reports in this database. "
+            "Records are stored in this service's own PostgreSQL, and the subject is not notified."
+        )
+    else:
+        intro_zh = (
+            "输入 WhatsApp 号码、公司名或联系人，查一查本地情报库里的历史举报。"
+            "数据只存在你的电脑上，查询本身不会通知对方。"
+        )
+        intro_en = (
+            "Search a WhatsApp number, company, or contact against reports in this local database. "
+            "Queries stay on this machine and the subject is not notified."
+        )
     theme.hero(
         i18n.tr("交易前先查一查", "CHECK BEFORE YOU TRADE"),
         i18n.tr("这个名字，靠谱吗？", "Is this buyer or supplier trustworthy?"),
-        i18n.tr(
-            "输入 WhatsApp 号码、公司名或联系人，查一查本地情报库里的历史举报。"
-            "数据只存在你的电脑上，查询本身不会通知对方。",
-            "Search a WhatsApp number, company, or contact against reports in this local database. "
-            "Queries stay on this machine and the subject is not notified.",
-        ),
+        i18n.tr(intro_zh, intro_en),
         tag=i18n.tr(
             f"已收录 {counts['reports']} 条举报 · 覆盖 {counts['phones']} 个号码",
             f"{counts['reports']} reports · {counts['phones']} numbers",

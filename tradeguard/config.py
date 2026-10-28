@@ -1,19 +1,24 @@
-"""应用配置：本地默认落地；Streamlit Cloud 使用可写临时目录。
+"""应用配置：本地默认落地 SQLite；配置 DATABASE_URL 后切换到 PostgreSQL 持久化。
 
-重要：Streamlit Community Cloud 的容器文件系统是临时的，应用重启/重新部署后
-SQLite 数据会丢失。公开演示版只应放虚构数据；真实数据请用私有部署或外部数据库。
+存储优先级：
+1. `DATABASE_URL`（或 `TRADEGUARD_DATABASE_URL`）—— PostgreSQL，云端重启不丢数据；
+2. 未配置时回落到 SQLite：本地写 `data/`，云端写系统临时目录（重启即清空）。
+
+注意：Streamlit Community Cloud / Render 免费版的文件系统是临时的，
+不配 DATABASE_URL 时 SQLite 数据会在重启、休眠或重新部署后丢失。
 """
 
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 from pathlib import Path
 
 APP_NAME = "TradeGuard"
 APP_TITLE = "TradeGuard · 外贸防骗情报库"
 APP_TAGLINE = "先查一查，再谈生意"
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 # 项目根目录（app.py 所在目录）
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -26,6 +31,28 @@ IS_CLOUD = (
     or bool(os.environ.get("RENDER_SERVICE_ID"))
 )
 PUBLIC_DEMO = os.environ.get("TRADEGUARD_PUBLIC_DEMO", "1" if IS_CLOUD else "0") == "1"
+
+
+def _read_secret(name: str) -> str:
+    """读 Streamlit Secrets；不在 Streamlit 运行时（如 pytest）直接返回空。"""
+    if "streamlit" not in sys.modules:
+        return ""
+    try:
+        import streamlit as st
+
+        value = st.secrets.get(name, "")
+        return str(value or "").strip()
+    except Exception:  # noqa: BLE001 - 没有 secrets.toml 时会抛异常
+        return ""
+
+
+# 云端持久化数据库：环境变量优先，其次 Streamlit Secrets
+DATABASE_URL = (
+    os.environ.get("DATABASE_URL", "")
+    or os.environ.get("TRADEGUARD_DATABASE_URL", "")
+    or _read_secret("DATABASE_URL")
+).strip()
+IS_POSTGRES = bool(DATABASE_URL)
 
 if os.environ.get("TRADEGUARD_DATA_DIR"):
     DATA_DIR = Path(os.environ["TRADEGUARD_DATA_DIR"])
