@@ -8,6 +8,7 @@ import streamlit as st
 
 from .. import components, theme
 from ... import i18n
+from ... import auth
 from ...auth import admin_configured, is_admin, public_mode
 from ...config import APP_TITLE, VERSION
 

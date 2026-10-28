@@ -227,6 +227,7 @@ def _render_form(db, uploaded_images) -> None:
         st.error(i18n.tr(f"截图处理失败：{exc}", f"Could not process screenshot: {exc}"))
         return
 
+    manual_norm = normalize_phone(manual_phone) if manual_phone.strip() else manual_phone.strip()
     report_status = "approved" if is_admin() else "pending"
     report_id = db.add_report(
         phones=[manual_norm] if manual_norm else [],
