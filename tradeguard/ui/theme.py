@@ -203,6 +203,11 @@ div[data-testid="stMetricValue"] { color: #0f172a; }
 .stTextInput input, .stTextArea textarea { border-radius: 10px; }
 .stSelectbox div[data-baseweb="select"] > div { border-radius: 10px; }
 
+/* 修复字体颜色和背景融为一体的问题 */
+.stCheckbox label p { color: #1e293b !important; font-size: 0.95rem; }
+.stCaption, .stCaption p { color: #475569 !important; font-size: 0.85rem; }
+.stAlert p, .stAlert div { color: #1e293b !important; }
+
 /* 侧边栏展开/收回按钮更显眼 */
 section[data-testid="stSidebarCollapseButton"],
 button[data-testid="stSidebarCollapseButton"] {
