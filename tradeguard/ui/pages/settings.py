@@ -66,7 +66,8 @@ def render(db) -> None:
                 # 显示截图
                 if report['evidence'] and report['evidence'].startswith("data:image"):
                     img_list = report['evidence'].split("|||")
-                    st.image(img_list, width=400)
+                    for img in img_list:
+                        st.markdown(f'<img src="{img}" style="width:100%; max-width:600px; margin:10px 0;">', unsafe_allow_html=True)
                 else:
                     st.caption("📷 已上传截图")
                 col1, col2 = st.columns(2)
