@@ -139,13 +139,15 @@ def _render_form(db, uploaded_images) -> None:
             i18n.tr("公司名（如知道，可选）", "Company (optional)"),
             placeholder=i18n.tr("例如：ABC Trading Co.", "e.g. ABC Trading Co."),
         )
+
+        platform_options = ["WhatsApp", "微信", "Facebook", "Instagram", "其他"]
+        contact_platform = st.selectbox(
+            i18n.tr("对方联系平台（必填）", "Contact platform (required)"),
+            options=platform_options,
+        )
         manual_phone = st.text_input(
-            i18n.tr("对方联系方式（号码 / 微信，可选）", "Phone / WeChat (optional)"),
+            i18n.tr("对方联系方式（必填）", "Contact info (required)"),
             placeholder="+1 555 123 4567",
-            help=i18n.tr(
-                "不知道可以不填；至少填写对方称呼，别人才能查到。",
-                "Leave blank if unknown. The name is enough for others to find this report.",
-            ),
         )
 
         categories = st.multiselect(
@@ -164,7 +166,7 @@ def _render_form(db, uploaded_images) -> None:
             ),
         )
 
-        consent = st.checkbox(i18n.tr("我确认说的是真事，恶意举报要负责任的", "I confirm this is true; false reports may have legal consequences."))
+        consent = st.checkbox(i18n.tr("我确实说的是真实事件，恶意举报要承担法律责任", "I confirm this is a true account; false reports may have legal consequences."))
         publish_screenshots = st.checkbox(
             i18n.tr(
                 "同意公开聊天截图作为证据（不勾选的话只有管理员能看到）",
@@ -182,12 +184,8 @@ def _render_form(db, uploaded_images) -> None:
         return
 
     errors: list[str] = []
-    manual_norm = normalize_phone(manual_phone) if manual_phone.strip() else None
-    if manual_phone.strip() and not manual_norm:
-        errors.append(i18n.tr(
-            "号码格式不太对；可以不填号码，只填对方称呼。",
-            "That phone number is invalid. You can leave it blank and fill in the name.",
-        ))
+    if not manual_phone.strip():
+        errors.append(i18n.tr("请填写对方联系方式。", "Please enter the contact info."))
     if not contact_name.strip():
         errors.append(i18n.tr("请填写对方称呼 / 昵称。", "Please enter the subject's name or nickname."))
     if len(narrative.strip()) < 10:
