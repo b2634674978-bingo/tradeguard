@@ -52,22 +52,13 @@ def render(db) -> None:
         ),
     )
 
-    # 两个大按钮，放在最显眼的位置
-    btn_cols = st.columns(2, gap="large")
-    with btn_cols[0]:
-        if st.button(
-            i18n.tr("🔍 立即查询", "🔍 Search Now"),
-            type="primary",
-            use_container_width=True,
-        ):
-            goto("查询验证")
-    with btn_cols[1]:
-        if st.button(
-            i18n.tr("📢 立即上报", "📢 Report Now"),
-            type="primary",
-            use_container_width=True,
-        ):
-            goto("上报记录")
+    # 立即上报大按钮，放在最显眼的位置
+    if st.button(
+        i18n.tr("📢 立即上报被骗经历", "📢 Report Your Scam Experience"),
+        type="primary",
+        use_container_width=True,
+    ):
+        goto("上报记录")
 
     st.markdown("<div style='height:1.5rem'></div>", unsafe_allow_html=True)
 
