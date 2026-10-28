@@ -91,12 +91,13 @@ section[data-testid="stSidebar"] a { color: #5eead4 !important; }
   font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase;
   color: #5eead4; font-weight: 700; margin-bottom: 0.55rem;
 }
-.tg-hero h1 { margin: 0 0 0.5rem; font-size: 2.05rem; line-height: 1.18; letter-spacing: -0.02em; }
+.tg-hero h1 { margin: 0 0 0.5rem; font-size: 2.05rem; line-height: 1.18; letter-spacing: -0.02em; color: #ffffff; font-weight: 700; }
 .tg-hero.compact h1 { font-size: 1.45rem; }
-.tg-hero p { margin: 0; color: #e0f2f1; font-size: 1rem; line-height: 1.65; max-width: 760px; font-weight: 500; }
+.tg-hero p { margin: 0; color: #f0fdfa; font-size: 1rem; line-height: 1.65; max-width: 760px; font-weight: 500; }
 .tg-hero .tg-hero-tag {
-  display: inline-block; margin-top: 1rem; font-size: 0.75rem; color: #99f6e4;
+  display: inline-block; margin-top: 1rem; font-size: 0.75rem; color: #5eead4;
   border: 1px solid rgba(94, 234, 212, 0.35); border-radius: 999px; padding: 0.28rem 0.7rem;
+  background: rgba(20, 184, 166, 0.15);
 }
 
 .tg-card {
@@ -203,11 +204,12 @@ div[data-testid="stMetricValue"] { color: #0f172a; }
 .stTextInput input, .stTextArea textarea { border-radius: 10px; }
 .stSelectbox div[data-baseweb="select"] > div { border-radius: 10px; }
 
-/* 修复字体颜色和背景融为一体的问题 */
-.stCheckbox label p { color: #1e293b !important; font-size: 0.95rem; }
-.stCaption, .stCaption p { color: #334155 !important; font-size: 0.9rem; font-weight: 500; }
-.stAlert p, .stAlert div { color: #1e293b !important; }
-.stMarkdown p { color: #1e293b !important; }
+/* 修复字体颜色和背景融为一体的问题：浅色背景配深色字 */
+.stCheckbox label p { color: #0f172a !important; font-size: 0.95rem; font-weight: 500; }
+.stCaption, .stCaption p { color: #1e293b !important; font-size: 0.9rem; font-weight: 600; }
+.stAlert p, .stAlert div { color: #0f172a !important; font-weight: 500; }
+.stMarkdown p { color: #0f172a !important; font-weight: 500; }
+.stTextInput label, .stTextArea label, .stSelectbox label { color: #0f172a !important; font-weight: 600; }
 
 /* 侧边栏展开/收回按钮更显眼 */
 section[data-testid="stSidebarCollapseButton"],
