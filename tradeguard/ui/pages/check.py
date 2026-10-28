@@ -60,16 +60,14 @@ def render(db) -> None:
             type="primary",
             use_container_width=True,
         ):
-            st.session_state["nav"] = "查询验证"
-            st.rerun()
+            goto("查询验证")
     with btn_cols[1]:
         if st.button(
             i18n.tr("📢 立即上报", "📢 Report Now"),
             type="primary",
             use_container_width=True,
         ):
-            st.session_state["nav"] = "上报记录"
-            st.rerun()
+            goto("上报记录")
 
     st.markdown("<div style='height:1.5rem'></div>", unsafe_allow_html=True)
 
