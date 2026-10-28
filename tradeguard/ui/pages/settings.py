@@ -32,7 +32,6 @@ COMPLIANCE_TEXT = """
 **产品原则**
 
 - 结果只是**风险提示**，不是事实认定、征信报告或法律判决；
-- 单条未经交叉验证的举报最高只到“中风险”，避免一次指控毁掉一个客户；
 - 每条记录都提供申诉入口，申诉保存在本机；
 - 数据最小化：只存号码、类型、经过、金额与证据摘要，不保存完整聊天记录；
 - 本地完整版的数据只在本机 SQLite；公开演示版运行在云端临时目录，应用重启后会重置。
@@ -62,6 +61,11 @@ def render(db) -> None:
             "The public demo is read-only; admins can back up, import, and clean data after signing in.",
         ),
     )
+
+    # 管理员登录入口放在设置页面顶部
+    if public_mode():
+        auth.login_widget()
+        st.markdown("---")
 
     if not is_admin():
         _render_read_only(db)
