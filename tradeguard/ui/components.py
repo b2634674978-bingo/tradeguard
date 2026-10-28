@@ -8,7 +8,7 @@ from datetime import date
 import streamlit as st
 
 from .. import i18n
-from ..auth import is_admin, public_viewer
+from ..auth import public_viewer
 from ..config import APP_TAGLINE, APP_TITLE
 from ..normalize import format_phone, mask_phone
 from ..risk import assess
@@ -154,14 +154,13 @@ def report_card(report: dict, db=None, *, public_view: bool = True) -> None:
 
 
 def appeal_block(db, report: dict, *, key_prefix: str = "a") -> None:
-    if not is_admin():
-        return
+    """申诉入口对所有人开放：这是被举报方的唯一救济渠道。"""
     with st.expander(
         i18n.tr("我是当事人 / 信息有误？提交申诉或补充说明", "Are you the subject? File an appeal")
     ):
         st.caption(i18n.tr(
-            "申诉会记录在本机数据库中，并在「设置与合规」里显示。原型阶段不自动删除任何记录。",
-            "Appeals are stored locally and shown in Settings. Nothing is removed automatically.",
+            "申诉会记录到后台，由管理员逐条复核。原型阶段不会自动删除任何记录。",
+            "Appeals go to the admin queue for manual review. Nothing is deleted automatically at this stage.",
         ))
         with st.form(f"appeal_form_{key_prefix}_{report.get('id')}"):
             message = st.text_area(
@@ -181,8 +180,8 @@ def appeal_block(db, report: dict, *, key_prefix: str = "a") -> None:
                 st.error(str(exc))
             else:
                 st.success(i18n.tr(
-                    "申诉已记录。原型阶段由你本人在「设置」中复核。",
-                    "Appeal recorded. You can review it in Settings.",
+                    "申诉已记录，管理员复核后会联系你。",
+                    "Appeal recorded. An admin will review it.",
                 ))
 
 

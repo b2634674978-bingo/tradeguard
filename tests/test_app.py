@@ -3,7 +3,7 @@ from pathlib import Path
 from streamlit.testing.v1 import AppTest
 
 APP = Path(__file__).resolve().parent.parent / "app.py"
-PAGES = ["查询验证", "上报记录", "情报库", "数据看板", "设置与合规"]
+PAGES = ["查询验证", "上报记录", "情报库", "数据看板", "帮助与合规"]
 
 
 def test_app_smoke():
@@ -14,17 +14,18 @@ def test_app_smoke():
     assert app.radio[0].options == PAGES
 
 
-def test_settings_page_renders():
-    """设置页在两种存储模式下都要能渲染（备份区块按引擎切换）。"""
+def test_help_page_renders():
+    """前台帮助页：只讲用法与边界，不出现任何运维内容。"""
     app = AppTest.from_file(str(APP), default_timeout=60)
     app.run()
-    app.radio[0].set_value("设置与合规").run()
+    app.radio[0].set_value("帮助与合规").run()
     assert not app.exception
 
     text = " ".join(item.value for item in app.caption) + " ".join(
         item.value for item in app.markdown
     )
-    assert "存储引擎" in text or "Storage engine" in text
+    assert "合规边界" in text
+    assert "存储引擎" not in text
 
 
 def test_query_page_renders():

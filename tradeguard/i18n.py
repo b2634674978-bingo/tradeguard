@@ -13,7 +13,8 @@ PAGE_LABELS = {
     "上报记录": ("上报记录", "Report"),
     "情报库": ("情报库", "Intel"),
     "数据看板": ("数据看板", "Dashboard"),
-    "设置与合规": ("设置与合规", "Settings"),
+    "帮助与合规": ("帮助与合规", "Help & rules"),
+    "管理后台": ("管理后台", "Admin"),
 }
 
 CATEGORY_LABELS_EN = {

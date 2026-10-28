@@ -51,6 +51,18 @@ def admin_configured() -> bool:
     return bool(_admin_password())
 
 
+def admin_entry_requested() -> bool:
+    """是否显式访问了管理后台（`?admin=1`）。
+
+    普通用户不会看到任何管理入口，只有主动带上这个参数才会进入后台导航。
+    """
+    try:
+        raw = str(st.query_params.get("admin", "")).strip().lower()
+    except Exception:  # 非 Streamlit 运行时
+        return False
+    return raw in {"1", "true", "yes", "on"}
+
+
 def admin_required() -> bool:
     """是否需要登录才能管理数据。
 
