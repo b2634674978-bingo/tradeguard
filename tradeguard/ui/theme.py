@@ -14,7 +14,7 @@ CSS = """
   --tg-ink: #0f172a;
   --tg-muted: #64748b;
   --tg-line: #e2e8f0;
-  --tg-bg: #f6f8fb;
+  --tg-bg: #f0fdfa;
   --tg-teal: #0f766e;
   --tg-teal-soft: #ccfbf1;
   --tg-red: #dc2626;
