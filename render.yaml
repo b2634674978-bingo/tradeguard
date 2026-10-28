@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: tradeguard
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.address 0.0.0.0 --server.port $PORT --server.headless true
+    envVars:
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: TRADEGUARD_PUBLIC_DEMO
+        value: "1"

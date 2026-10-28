@@ -13,7 +13,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterable
 
-from . import config
+from . import config, storage
 from .constants import (
     CATEGORIES,
     CATEGORY_BY_LABEL,
@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS reports (
     chat_message_count INTEGER,
     credibility INTEGER NOT NULL DEFAULT 60,
     status TEXT NOT NULL DEFAULT 'approved',
+    publish_screenshots INTEGER NOT NULL DEFAULT 0,
     reporter_hash TEXT
 );
 
@@ -66,6 +67,20 @@ CREATE TABLE IF NOT EXISTS report_phones (
 
 CREATE INDEX IF NOT EXISTS idx_report_phones_norm ON report_phones(phone_norm);
 CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status);
+
+CREATE TABLE IF NOT EXISTS report_images (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    report_id INTEGER NOT NULL,
+    mime TEXT NOT NULL,
+    data BLOB NOT NULL,
+    size INTEGER NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    is_public INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_report_images_report ON report_images(report_id);
 
 CREATE TABLE IF NOT EXISTS appeals (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -133,6 +148,12 @@ class Database:
     def init(self) -> None:
         with self._connect() as conn:
             conn.executescript(SCHEMA)
+            columns = {row["name"] for row in conn.execute("PRAGMA table_info(reports)")}
+            if "publish_screenshots" not in columns:
+                conn.execute(
+                    "ALTER TABLE reports ADD COLUMN publish_screenshots INTEGER NOT NULL DEFAULT 0"
+                )
+            self._migrate_legacy_images(conn)
 
     def ensure_seeded(self) -> bool:
         """首次运行自动载入演示数据；用户清空后不再自动恢复。"""
@@ -152,6 +173,43 @@ class Database:
                 "INSERT OR REPLACE INTO meta(key, value) VALUES ('demo_seeded', '1')"
             )
             return inserted
+
+    def _migrate_legacy_images(self, conn: sqlite3.Connection) -> None:
+        """把旧版本塞在 evidence 里的 base64 截图迁移到 report_images（BLOB）。"""
+        done = conn.execute(
+            "SELECT value FROM meta WHERE key = 'images_migrated'"
+        ).fetchone()
+        if done:
+            return
+
+        rows = conn.execute(
+            "SELECT id, evidence FROM reports WHERE evidence LIKE 'data:image%'"
+        ).fetchall()
+        for row in rows:
+            report_id = row["id"]
+            parts = (row["evidence"] or "").split("|||")
+            saved = 0
+            for order, part in enumerate(parts):
+                if not part.strip().startswith("data:image"):
+                    continue
+                try:
+                    raw, _mime = storage.decode_data_url(part)
+                    data, mime = storage.compress_image(raw)
+                except Exception:  # noqa: BLE001 - 单张迁移失败不影响其他记录
+                    continue
+                conn.execute(
+                    """
+                    INSERT INTO report_images
+                        (report_id, mime, data, size, sort_order, is_public, created_at)
+                    VALUES (?, ?, ?, ?, ?, 0, ?)
+                    """,
+                    (report_id, mime, sqlite3.Binary(data), len(data), order, _now()),
+                )
+                saved += 1
+            if saved:
+                conn.execute("UPDATE reports SET evidence = '' WHERE id = ?", (report_id,))
+
+        conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('images_migrated', '1')")
 
     # ------------------------------------------------------------ 写入
 
@@ -174,6 +232,7 @@ class Database:
         chat_message_count: int | None = None,
         credibility: int = 60,
         status: str = "approved",
+        publish_screenshots: bool = False,
         created_at: str | None = None,
     ) -> int:
         with self._connect() as conn:
@@ -195,6 +254,7 @@ class Database:
                 chat_message_count=chat_message_count,
                 credibility=credibility,
                 status=status,
+                publish_screenshots=publish_screenshots,
                 created_at=created_at,
             )
 
@@ -233,6 +293,7 @@ class Database:
         status = kwargs.get("status") if kwargs.get("status") in REPORT_STATUS else "approved"
         source = kwargs.get("source") if kwargs.get("source") in SOURCES else "manual"
         credibility = max(0, min(100, int(kwargs.get("credibility") or 60)))
+        publish_screenshots = 1 if kwargs.get("publish_screenshots") else 0
         created_at = kwargs.get("created_at") or _now()
 
         cursor = conn.execute(
@@ -240,8 +301,9 @@ class Database:
             INSERT INTO reports (
                 created_at, incident_date, contact_name, company, country, categories,
                 amount, currency, narrative, evidence, source, chat_filename,
-                chat_sha256, chat_message_count, credibility, status, reporter_hash
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                chat_sha256, chat_message_count, credibility, status,
+                publish_screenshots, reporter_hash
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 created_at,
@@ -260,6 +322,7 @@ class Database:
                 kwargs.get("chat_message_count"),
                 credibility,
                 status,
+                publish_screenshots,
                 None,
             ),
         )
@@ -270,6 +333,35 @@ class Database:
                 (report_id, norm),
             )
         return report_id
+
+    def add_report_images(self, report_id: int, images: list[dict[str, Any]]) -> int:
+        """图片以压缩后的 BLOB 保存，不再把 base64 塞进 evidence。"""
+        saved = 0
+        with self._connect() as conn:
+            for order, image in enumerate(images or []):
+                data = image.get("data") or b""
+                if not data:
+                    continue
+                mime = str(image.get("mime") or "image/jpeg")
+                is_public = 1 if image.get("is_public") else 0
+                conn.execute(
+                    """
+                    INSERT INTO report_images
+                        (report_id, mime, data, size, sort_order, is_public, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        report_id,
+                        mime,
+                        sqlite3.Binary(data),
+                        len(data),
+                        order,
+                        is_public,
+                        _now(),
+                    ),
+                )
+                saved += 1
+        return saved
 
     def set_status(self, report_id: int, status: str) -> None:
         if status not in REPORT_STATUS:
@@ -294,6 +386,7 @@ class Database:
     def clear_all(self) -> int:
         with self._connect() as conn:
             count = conn.execute("SELECT COUNT(*) AS n FROM reports").fetchone()["n"]
+            conn.execute("DELETE FROM report_images")
             conn.execute("DELETE FROM report_phones")
             conn.execute("DELETE FROM appeals")
             conn.execute("DELETE FROM reports")
@@ -312,6 +405,62 @@ class Database:
             return int(cursor.lastrowid)
 
     # ------------------------------------------------------------ 读取
+
+    def get_report_images(self, report_id: int, *, public_only: bool = False) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            sql = """
+                SELECT mime, data, size, is_public, sort_order
+                FROM report_images
+                WHERE report_id = ?
+            """
+            params: list[Any] = [report_id]
+            if public_only:
+                sql += " AND is_public = 1"
+            sql += " ORDER BY sort_order, id"
+            rows = conn.execute(sql, params).fetchall()
+            return [
+                {
+                    "mime": row["mime"],
+                    "data": bytes(row["data"]),
+                    "size": row["size"],
+                    "is_public": bool(row["is_public"]),
+                    "sort_order": row["sort_order"],
+                }
+                for row in rows
+            ]
+
+    def _images_map(
+        self,
+        conn: sqlite3.Connection,
+        report_ids: list[int],
+        *,
+        public_only: bool = False,
+    ) -> dict[int, list[dict[str, Any]]]:
+        if not report_ids:
+            return {}
+        qmarks = ",".join("?" for _ in report_ids)
+        sql = f"""
+            SELECT report_id, mime, data, size, is_public, sort_order
+            FROM report_images
+            WHERE report_id IN ({qmarks})
+        """
+        params: list[Any] = list(report_ids)
+        if public_only:
+            sql += " AND is_public = 1"
+        sql += " ORDER BY sort_order, id"
+        rows = conn.execute(sql, params).fetchall()
+        mapping: dict[int, list[dict[str, Any]]] = {}
+        for row in rows:
+            mapping.setdefault(row["report_id"], []).append(
+                {
+                    "mime": row["mime"],
+                    "data": bytes(row["data"]),
+                    "size": row["size"],
+                    "is_public": bool(row["is_public"]),
+                    "sort_order": row["sort_order"],
+                }
+            )
+        return mapping
 
     def _phones_map(self, conn: sqlite3.Connection, report_ids: list[int]) -> dict[int, list[str]]:
         if not report_ids:
@@ -353,6 +502,7 @@ class Database:
             "credibility": row["credibility"],
             "status": row["status"],
             "status_label": REPORT_STATUS.get(row["status"], row["status"]),
+            "publish_screenshots": bool(row["publish_screenshots"]) if "publish_screenshots" in row.keys() else False,
             "phones": phones.get(row["id"], []),
             "date": row["incident_date"] or row["created_at"][:10],
         }
@@ -600,6 +750,26 @@ class Database:
         filtered.sort(key=lambda p: p["risk"]["score"], reverse=True)
         return filtered[:limit], len(filtered)
 
+    def list_pending_reports(self, limit: int = 30) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM reports
+                WHERE status = 'pending'
+                ORDER BY created_at ASC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+            phones = self._phones_map(conn, [row["id"] for row in rows])
+            images = self._images_map(conn, [row["id"] for row in rows])
+            reports = []
+            for row in rows:
+                report = self._row_to_report(row, phones)
+                report["images"] = images.get(row["id"], [])
+                reports.append(report)
+            return reports
+
     def recent_reports(self, limit: int = 8) -> list[dict[str, Any]]:
         with self._connect() as conn:
             rows = conn.execute(
@@ -825,19 +995,4 @@ class Database:
             ).fetchall()
             return [dict(row) for row in rows]
 
-    def list_pending_reports(self, limit: int = 20) -> list[dict[str, Any]]:
-        """列出所有待审核的举报"""
-        with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT * FROM reports WHERE status = 'pending' ORDER BY created_at DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
-            result = [dict(row) for row in rows]
-            # 再查每个举报对应的号码
-            for report in result:
-                phones = conn.execute(
-                    "SELECT phone_norm FROM report_phones WHERE report_id = ?",
-                    (report["id"],),
-                ).fetchall()
-                report["phones"] = ", ".join([p["phone_norm"] for p in phones])
-            return result
+

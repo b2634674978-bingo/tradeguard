@@ -8,8 +8,8 @@ import streamlit as st
 
 from .. import components, theme
 from ..nav import goto
-from ...constants import CATEGORY_LABELS
-from ...normalize import mask_phone
+from ... import i18n
+from ...auth import is_admin
 
 EXAMPLES = ["+1 555 010 4477", "NovaPeak Supplements", "+44 7700 900123"]
 
@@ -25,31 +25,45 @@ def render(db) -> None:
     if "search_query" not in st.session_state:
         st.session_state["search_query"] = last_query
     theme.hero(
-        "交易前先查一查",
-        "这个名字，靠谱吗？",
-        "输入 WhatsApp 号码、公司名或联系人，查一查本地情报库里的历史举报。"
-        "数据只存在你的电脑上，查询本身不会通知对方。",
-        tag=f"已收录 {counts['reports']} 条举报 · 覆盖 {counts['phones']} 个号码",
+        i18n.tr("交易前先查一查", "CHECK BEFORE YOU TRADE"),
+        i18n.tr("这个名字，靠谱吗？", "Is this buyer or supplier trustworthy?"),
+        i18n.tr(
+            "输入 WhatsApp 号码、公司名或联系人，查一查本地情报库里的历史举报。"
+            "数据只存在你的电脑上，查询本身不会通知对方。",
+            "Search a WhatsApp number, company, or contact against reports in this local database. "
+            "Queries stay on this machine and the subject is not notified.",
+        ),
+        tag=i18n.tr(
+            f"已收录 {counts['reports']} 条举报 · 覆盖 {counts['phones']} 个号码",
+            f"{counts['reports']} reports · {counts['phones']} numbers",
+        ),
     )
 
     with st.form("search_form"):
         columns = st.columns([5.4, 1.2])
         query = columns[0].text_input(
-            "查询对象",
-            placeholder="例如：+1 555 010 4477、NovaPeak Supplements、Mike R.",
+            i18n.tr("查询对象", "Search"),
+            placeholder=i18n.tr(
+                "例如：+1 555 010 4477、NovaPeak Supplements、Mike R.",
+                "e.g. +1 555 010 4477, NovaPeak Supplements, Mike R.",
+            ),
             label_visibility="collapsed",
             key="search_query",
         )
-        submitted = columns[1].form_submit_button("立即查询", type="primary", use_container_width=True)
+        submitted = columns[1].form_submit_button(
+            i18n.tr("立即查询", "Search"),
+            type="primary",
+            use_container_width=True,
+        )
 
     if submitted:
         if query.strip():
             st.session_state["last_query"] = query.strip()
         else:
-            st.warning("先输入号码、公司名或联系人。")
+            st.warning(i18n.tr("先输入号码、公司名或联系人。", "Enter a number, company, or contact."))
 
     example_cols = st.columns([1.1, 2.1, 2.7, 2.2, 1.2])
-    example_cols[0].caption("试试：")
+    example_cols[0].caption(i18n.tr("试试：", "Try:"))
     for index, example in enumerate(EXAMPLES):
         example_cols[index + 1].button(
             example,
@@ -67,12 +81,33 @@ def render(db) -> None:
 
 
 def _render_intro(db) -> None:
-    theme.section_title("查询之前，先记住三条")
+    theme.section_title(i18n.tr("查询之前，先记住三条", "Three rules before you search"))
     columns = st.columns(3)
     cards = [
-        ("🔎", "先查再谈", "谈样品、谈价格之前，先用号码和公司名查一遍。30 秒，可能省下几周的样品和时间。"),
-        ("⚖️", "风险提示 ≠ 判决", "单条举报最高只到中风险。请结合多条记录、证据、时间和自己的判断，不要只凭一个分数拉黑客户。"),
-        ("🕳️", "无记录 ≠ 可信", "骗子会换号、换公司名。没有记录只说明没人报过，验厂、担保、分阶段付款仍然是底线。"),
+        (
+            "🔎",
+            i18n.tr("先查再谈", "Check first"),
+            i18n.tr(
+                "谈样品、谈价格之前，先用号码和公司名查一遍。30 秒，可能省下几周的样品和时间。",
+                "Search the number and company before discussing samples or pricing. Thirty seconds can save weeks of samples and time.",
+            ),
+        ),
+        (
+            "⚖️",
+            i18n.tr("风险提示 ≠ 判决", "A risk flag is not a verdict"),
+            i18n.tr(
+                "单条举报最高只到中风险。请结合多条记录、证据、时间和自己的判断，不要只凭一个分数拉黑客户。",
+                "A single unverified report is capped at medium risk. Review multiple reports, evidence, timing, and your own judgment.",
+            ),
+        ),
+        (
+            "🕳️",
+            i18n.tr("无记录 ≠ 可信", "No record does not mean safe"),
+            i18n.tr(
+                "骗子会换号、换公司名。没有记录只说明没人报过，验厂、担保、分阶段付款仍然是底线。",
+                "Scammers change numbers and company names. No record only means nobody has reported them yet. Keep verifying factories and using escrow or staged payments.",
+            ),
+        ),
     ]
     for column, (icon, title, body) in zip(columns, cards):
         with column:
@@ -87,15 +122,18 @@ def _render_intro(db) -> None:
                 unsafe_allow_html=True,
             )
 
-    theme.section_title("这个库怎么来的")
+    theme.section_title(i18n.tr("这个库怎么来的", "How this database is built"))
     st.markdown(
-        """
-        <div class="tg-note">
-          每一条记录都来自真实受骗者的主动上报，包含号码、问题类型、经过和聊天证据摘要。
-          系统会聚合同一个号码的多条记录，给出<strong>可解释</strong>的风险分，而不是一个黑箱结论。
-          当前版本把数据保存在本机 SQLite 中，你可以在「设置与合规」里备份、导出或清空。
-        </div>
-        """,
+        '<div class="tg-note">'
+        + i18n.tr(
+            "每一条记录都来自真实受骗者的主动上报，包含号码、问题类型、经过和聊天截图。"
+            "系统会聚合同一个号码的多条记录，给出<strong>可解释</strong>的风险分，而不是一个黑箱结论。"
+            "管理员审核通过后，记录才会公开显示。",
+            "Every record comes from a voluntary report with the number, issue type, narrative, and screenshots. "
+            "Reports are grouped by number with an <strong>explainable</strong> risk score, not a black-box verdict. "
+            "Records become public only after admin review.",
+        )
+        + "</div>",
         unsafe_allow_html=True,
     )
 
@@ -106,8 +144,11 @@ def _render_result(db, query: str) -> None:
     text_reports = result["text_reports"]
 
     st.markdown(
-        f'<div class="tg-section-title">查询结果</div>'
-        f'<div class="tg-name" style="margin-bottom:.2rem">{html.escape(query)}</div>',
+        '<div class="tg-section-title">'
+        + i18n.tr("查询结果", "Search results")
+        + '</div><div class="tg-name" style="margin-bottom:.2rem">'
+        + html.escape(query)
+        + "</div>",
         unsafe_allow_html=True,
     )
 
@@ -121,8 +162,12 @@ def _render_result(db, query: str) -> None:
 
     if exact:
         theme.note(
-            f"⚠️ 本地库中找到了 <strong>{len(exact)}</strong> 个号码记录。以下风险分来自历史举报聚合，"
-            "不是法律结论；请看完证据再决定。",
+            i18n.tr(
+                f"⚠️ 本地库中找到了 <strong>{len(exact)}</strong> 个号码记录。以下风险分来自历史举报聚合，"
+                "不是法律结论；请看完证据再决定。",
+                f"⚠️ Found <strong>{len(exact)}</strong> matching number record(s). Scores aggregate prior reports "
+                "and are not legal conclusions. Review the evidence before deciding.",
+            ),
             "warn",
         )
         for profile in exact:
@@ -132,7 +177,11 @@ def _render_result(db, query: str) -> None:
 
     if suffix:
         theme.note(
-            "没有完全一致的号码，但以下号码与查询号码<strong>尾号相同</strong>，可能是同一人换号，请人工核对。",
+            i18n.tr(
+                "没有完全一致的号码，但以下号码与查询号码<strong>尾号相同</strong>，可能是同一人换号，请人工核对。",
+                "No exact number match, but the numbers below share the <strong>same last digits</strong>. "
+                "They may be the same person using a new number; verify manually.",
+            ),
             "warn",
         )
         for profile in suffix:
@@ -142,7 +191,11 @@ def _render_result(db, query: str) -> None:
 
     if by_name:
         theme.note(
-            "号码没有命中，但<strong>公司 / 联系人名称</strong>命中了以下记录。请结合公司地址、域名、联系人核实是否为同一主体。",
+            i18n.tr(
+                "号码没有命中，但<strong>公司 / 联系人名称</strong>命中了以下记录。请结合公司地址、域名、联系人核实是否为同一主体。",
+                "The number did not match, but the <strong>company or contact name</strong> did. "
+                "Verify the address, domain, and contact before treating them as the same entity.",
+            ),
             "warn",
         )
         for profile in by_name:
@@ -151,14 +204,22 @@ def _render_result(db, query: str) -> None:
             )
 
     if text_reports:
-        st.markdown('<div class="tg-section-title">相关记录</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="tg-section-title">'
+            + i18n.tr("相关记录", "Related reports")
+            + "</div>",
+            unsafe_allow_html=True,
+        )
         for report in text_reports:
-            components.report_card(report)
+            components.report_card(report, db, public_view=not is_admin())
 
     for note in result["notes"]:
         st.caption(note)
 
-    st.caption("风险分仅用于提示交易风险，不构成对任何个人或公司的法律认定。")
+    st.caption(i18n.tr(
+        "风险分仅用于提示交易风险，不构成对任何个人或公司的法律认定。",
+        "Risk scores are for transaction risk awareness only and are not legal findings about any person or company.",
+    ))
     _interpretation_expander()
 
 
@@ -166,18 +227,34 @@ def _render_no_result(db, query: str, result: dict) -> None:
     phone_input = result.get("phone_input")
     components.empty_state(
         "🕳️",
-        f"本地库暂无「{query}」的记录",
+        i18n.tr(
+            f"本地库暂无「{query}」的记录",
+            f"No local record for “{query}”",
+        ),
         [
-            "没有记录，不代表对方可信。骗子经常换号、换公司名、换接头人。",
-            "建议先视频验厂/验货、核实公司注册信息，再走可追溯的付款方式。",
-            "如果你和这个人打过交道并踩了坑，花 2 分钟上报，下一个人就能查到。",
+            i18n.tr(
+                "没有记录，不代表对方可信。骗子经常换号、换公司名、换接头人。",
+                "No record does not mean the subject is trustworthy. Scammers change numbers, companies, and contacts.",
+            ),
+            i18n.tr(
+                "建议先视频验厂/验货、核实公司注册信息，再走可追溯的付款方式。",
+                "Verify the factory or goods on video, check company registration, and use traceable payments.",
+            ),
+            i18n.tr(
+                "如果你和这个人打过交道并踩了坑，花 2 分钟上报，下一个人就能查到。",
+                "If you have dealt with this subject and lost money, spend two minutes reporting it so others can find it.",
+            ),
         ],
     )
     columns = st.columns([1.2, 1.2, 2.6])
-    if columns[0].button("我遇到过这个人，去上报", type="primary", use_container_width=True):
+    if columns[0].button(
+        i18n.tr("我遇到过这个人，去上报", "I dealt with them — report"),
+        type="primary",
+        use_container_width=True,
+    ):
         st.session_state["prefill_phone"] = phone_input or ""
         goto("上报记录")
-    if columns[1].button("换个号码再查", use_container_width=True):
+    if columns[1].button(i18n.tr("换个号码再查", "Search another"), use_container_width=True):
         st.session_state["last_query"] = ""
         st.session_state["search_query"] = ""
         st.rerun()
@@ -186,17 +263,30 @@ def _render_no_result(db, query: str, result: dict) -> None:
 
 
 def _interpretation_expander() -> None:
-    with st.expander("风险分是怎么算的？"):
+    with st.expander(i18n.tr("风险分是怎么算的？", "How is the risk score calculated?")):
         st.markdown(
-            """
-            **加分项**：被举报次数、问题类型严重度、最近 90 天是否活跃、是否附带聊天记录、涉及金额、举报可信度。
+            i18n.tr(
+                """
+                **加分项**：被举报次数、问题类型严重度、最近 90 天是否活跃、是否附带聊天记录、涉及金额、举报可信度。
 
-            **保守设计**：
-            - 单条未经交叉验证的举报：有聊天记录且可信度 ≥70 时最高 **55 分（中风险）**；仅文字描述最高 **39 分（低风险）**；
-            - 多条记录 + 严重类型 + 近期活跃，才可能进入 **高风险**；
-            - 每条评分都会显示依据，方便你自己判断；
-            - 所有记录都可以申诉，申诉会进入本地复核列表。
+                **保守设计**：
+                - 单条未经交叉验证的举报：有聊天记录且可信度 ≥70 时最高 **55 分（中风险）**；仅文字描述最高 **39 分（低风险）**；
+                - 多条记录 + 严重类型 + 近期活跃，才可能进入 **高风险**；
+                - 每条评分都会显示依据，方便你自己判断；
+                - 所有记录都可以申诉，申诉会进入本地复核列表。
 
-            这是一个**风险提示工具**，不是征信报告，也不是法院判决。
-            """
+                这是一个**风险提示工具**，不是征信报告，也不是法院判决。
+                """,
+                """
+                **Signals:** number of reports, issue severity, activity in the last 90 days, attached chat evidence, amount involved, and reporter credibility.
+
+                **Conservative design:**
+                - A single uncorroborated report is capped at **55 (medium)** when chat evidence exists and credibility is >=70; text-only reports are capped at **39 (low)**.
+                - High risk requires multiple reports, a serious issue type, and recent activity.
+                - Every score shows its reasons so you can judge for yourself.
+                - Every record can be appealed.
+
+                This is a **risk-awareness tool**, not a credit report or a court judgment.
+                """,
+            )
         )

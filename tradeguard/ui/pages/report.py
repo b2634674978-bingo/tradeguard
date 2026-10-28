@@ -1,178 +1,182 @@
-"""上报记录页：上传 / 粘贴 WhatsApp 聊天，解析后补充信息入库。"""
+"""上报记录页：上传截图 + 简单填写，普通用户进入待审核。"""
 
 from __future__ import annotations
 
 import html
-import base64
 from datetime import date
 
 import streamlit as st
 
 from .. import components, theme
 from ..nav import goto
+from ... import i18n, storage
 from ...auth import is_admin, public_mode
-from ...chat_parser import parse_export
-from ...config import MAX_UPLOAD_BYTES
-from ...constants import CATEGORIES, CATEGORY_KEYS, CATEGORY_LABELS, CURRENCIES
+from ...config import MAX_IMAGES, MAX_IMAGE_BYTES
+from ...constants import CATEGORIES, CATEGORY_KEYS, CATEGORY_LABELS
 from ...normalize import format_phone, normalize_phone
-
-CONFIDENCE_LABELS = {"high": "高", "medium": "中", "low": "低"}
 
 
 def render(db) -> None:
     theme.page_header(
-        "上传被骗经历",
-        "把一次受骗，变成所有人的防线",
-        "上传 WhatsApp 导出的聊天记录，系统自动提取对方号码、时间线和风险信号；"
-        "补充经过后入库。只保存必要证据，不保存完整聊天原文。",
+        i18n.tr("上传被骗经历", "Report a scam"),
+        i18n.tr("把一次受骗，变成所有人的防线", "Turn one bad experience into protection for everyone"),
+        i18n.tr(
+            "上传 3 张聊天截图，简单填写信息。管理员审核通过后才会公开显示，避免未经核实的指控。",
+            "Upload three chat screenshots and fill in a few fields. Reports become public only after admin review.",
+        ),
     )
 
     if public_mode():
         if is_admin():
-            st.caption("云端临时存储：应用重启/重新部署后，本页新增的数据可能丢失。请及时在设置中备份。")
+            st.caption(i18n.tr(
+                "管理员提交的记录会直接公开；云端重启后数据可能重置，请及时备份。",
+                "Admin reports are published immediately. Cloud data may reset on restart; back up regularly.",
+            ))
         else:
             theme.note(
-                "你提交的举报会进入<strong>待审核队列</strong>，管理员审核通过后才会公开显示。"
-                "请确保你提交的信息真实、有聊天记录佐证，不要恶意诬告。",
+                i18n.tr(
+                    "你提交的举报会进入<strong>待审核队列</strong>，管理员审核通过后才会公开显示。"
+                    "请确保信息真实、有截图佐证，不要恶意诬告。",
+                    "Your report enters a <strong>pending review queue</strong> and becomes public only after approval. "
+                    "Make sure it is truthful and supported by screenshots. False reports may have legal consequences.",
+                ),
                 "info",
             )
 
     _render_success_block()
 
     with st.container(border=True):
-        st.markdown("#### 1 · 上传聊天截图（必填，至少3张）")
-        st.caption("💡 要求：第一张必须是对方的个人主页/资料截图（能看到他的号码、名字、公司），后面2张传关键的聊天记录截图，这样管理员审核的时候能确认是同一个人。系统不会公开你的截图，只留作审核证据。")
+        st.markdown(i18n.tr("#### 1 · 上传聊天截图（至少 3 张）", "#### 1 · Upload screenshots (at least 3)"))
+        st.caption(i18n.tr(
+            "💡 第一张上传对方的个人主页/资料截图（能看到号码、名字、公司），"
+            "后两张上传关键聊天记录。截图只用于审核；只有你勾选「同意公开」并通过审核后，其他访客才能看到。",
+            "💡 Upload the subject's profile screenshot first (showing number/name/company), then two key chat screenshots. "
+            "Screenshots are used for review; other visitors see them only if you opt in and the report is approved.",
+        ))
         uploaded_images = st.file_uploader(
-            "上传聊天截图",
+            i18n.tr("上传聊天截图", "Upload screenshots"),
             type=["png", "jpg", "jpeg"],
             accept_multiple_files=True,
             key="image_upload",
         )
         if uploaded_images:
-            if len(uploaded_images) >= 3:
-                st.success(f"已上传 {len(uploaded_images)} 张截图，符合要求")
+            if len(uploaded_images) > MAX_IMAGES:
+                st.error(i18n.tr(f"最多上传 {MAX_IMAGES} 张截图，请删掉一些。", f"Up to {MAX_IMAGES} screenshots; please remove some."))
+            elif len(uploaded_images) >= 3:
+                st.success(i18n.tr(f"已上传 {len(uploaded_images)} 张截图，符合要求。", f"{len(uploaded_images)} screenshots uploaded."))
             else:
-                st.warning(f"已上传 {len(uploaded_images)} 张，还需要至少 {3 - len(uploaded_images)} 张才能提交")
+                st.warning(i18n.tr(
+                    f"已上传 {len(uploaded_images)} 张，还需要至少 {3 - len(uploaded_images)} 张才能提交。",
+                    f"{len(uploaded_images)} uploaded; at least {3 - len(uploaded_images)} more required.",
+                ))
+            preview_cols = st.columns(min(3, len(uploaded_images)))
+            for index, image in enumerate(uploaded_images[:6]):
+                with preview_cols[index % len(preview_cols)]:
+                    st.image(
+                        image.getvalue(),
+                        caption=i18n.tr(f"截图 {index + 1}", f"Screenshot {index + 1}"),
+                        use_container_width=True,
+                    )
 
-    _render_form(db, None, uploaded_images)
+    _render_form(db, uploaded_images)
 
 
 def _render_success_block() -> None:
     success = st.session_state.get("report_success")
     if not success:
         return
-    if is_admin():
-        st.success(f"已收录：{success['label']} · {success['query']}。你可以在「查询验证」里立即查到它。")
-    else:
-        st.success(f"提交成功！你的举报已进入待审核队列。\n\n类别：{success['label']} · 对象：{success['query']}\n\n管理员审核通过后才会公开显示。")
+    if success.get("pending"):
+        st.success(
+            i18n.tr(
+                f"提交成功！举报已进入待审核队列。\n\n类别：{success['label']} · 对象：{success['query']}\n\n"
+                "管理员审核通过后才会公开显示。",
+                f"Submitted. Your report is pending review.\n\nType: {success['label']} · Subject: {success['query']}\n\n"
+                "It becomes public only after admin approval.",
+            )
+        )
+        cols = st.columns([1.5, 1.5, 3.5])
+        if cols[0].button(i18n.tr("返回查询", "Back to search"), type="primary", use_container_width=True, key="success_back"):
+            st.session_state.pop("report_success", None)
+            goto("查询验证")
+        if cols[1].button(i18n.tr("继续上报", "Report another"), use_container_width=True, key="success_continue"):
+            st.session_state.pop("report_success", None)
+            st.rerun()
+        return
+
+    st.success(i18n.tr(
+        f"已收录：{success['label']} · {success['query']}。你可以在「查询验证」里立即查到它。",
+        f"Published: {success['label']} · {success['query']}. You can find it in Search now.",
+    ))
     cols = st.columns([1.5, 1.5, 3.5])
-    if cols[0].button("查看风险档案", type="primary", use_container_width=True):
+    if cols[0].button(i18n.tr("查看风险档案", "View risk profile"), type="primary", use_container_width=True, key="success_view"):
         st.session_state["last_query"] = success["query"]
         st.session_state["search_query"] = success["query"]
         goto("查询验证")
-    if cols[1].button("继续上报下一条", use_container_width=True):
+    if cols[1].button(i18n.tr("继续上报下一条", "Report another"), use_container_width=True, key="success_next"):
         st.session_state.pop("report_success", None)
-        st.session_state.pop("parsed_chat", None)
         st.rerun()
-    if is_admin():
-        st.caption("提示：管理员提交的记录直接公开；你可以在「设置与合规」中复核、导出或删除记录。")
+    st.caption(i18n.tr(
+        "提示：管理员提交的记录直接公开；你可以在「设置与合规」中复核、导出或删除记录。",
+        "Admin reports are published immediately. You can review, export, or delete records in Settings.",
+    ))
 
 
-def _render_parsed(parsed) -> None:
-    for warning in parsed.warnings:
-        st.warning(warning)
-
-    columns = st.columns(4)
-    columns[0].metric("消息数", parsed.message_count)
-    columns[1].metric("参与者", parsed.participant_count)
-    columns[2].metric("识别号码", len(parsed.phones))
-    columns[3].metric("风险信号", len(parsed.signals))
-
-    with st.expander("查看解析详情", expanded=True):
-        st.caption(f"文件：{parsed.filename} · 编码：{parsed.encoding} · 时间范围：{parsed.date_range}")
-
-        if parsed.phones:
-            st.markdown("**识别到的号码（按可信度排序）**")
-            confidence = {"high": "高", "medium": "中", "low": "低"}
-            for phone in parsed.phones:
-                st.markdown(
-                    f"- {phone.display} · 出现 {phone.mentions} 次 · 可信度 "
-                    f"{confidence.get(phone.confidence, phone.confidence)}"
-                )
-        else:
-            st.info("没有从聊天记录里识别到号码，可以在下面手动填写。")
-
-        if parsed.signals:
-            st.markdown("**聊天里的风险信号（只作提示，需人工判断）**")
-            pills = "".join(
-                f'<span class="tg-pill">{signal.label} <b>×{signal.hits}</b></span>'
-                for signal in parsed.signals
-            )
-            st.markdown(f'<div class="tg-pills" style="margin-top:0">{pills}</div>', unsafe_allow_html=True)
-
-        details = []
-        if parsed.senders:
-            details.append("发送者：" + "、".join(f"{name}（{count} 条）" for name, count in parsed.senders[:6]))
-        if parsed.money_mentions:
-            details.append("金额提及：" + "、".join(parsed.money_mentions[:6]))
-        if parsed.company_hints:
-            details.append("邮箱域名线索：" + "、".join(parsed.company_hints))
-        if parsed.media_count:
-            details.append(f"媒体占位符：{parsed.media_count} 处")
-        if parsed.url_count:
-            details.append(f"链接：{parsed.url_count} 个")
-        for detail in details:
-            st.caption(detail)
-
-        if parsed.evidence_hint():
-            st.markdown("**可自动带入的证据摘要**")
-            st.markdown(
-                f'<div class="tg-quote">{html.escape(parsed.evidence_hint())}</div>',
-                unsafe_allow_html=True,
-            )
-
-
-def _render_form(db, parsed, uploaded_images=None) -> None:
-    st.markdown('<div class="tg-section-title">2 · 简单填写信息</div>', unsafe_allow_html=True)
+def _render_form(db, uploaded_images) -> None:
+    st.markdown(
+        '<div class="tg-section-title">'
+        + i18n.tr("2 · 简单填写信息", "2 · Basic details")
+        + "</div>",
+        unsafe_allow_html=True,
+    )
 
     with st.form("report_form"):
-        manual_phone = st.text_input(
-            "对方联系方式（号码/微信，可选）",
-            placeholder="+1 555 123 4567",
-            help="不知道可以不填，至少填一个下面的名字或公司名就行",
-        )
-
         columns = st.columns(2)
         contact_name = columns[0].text_input(
-            "对方称呼 / 昵称（必填）",
-            placeholder="例如：Mike",
+            i18n.tr("对方称呼 / 昵称（必填）", "Name / nickname (required)"),
+            placeholder=i18n.tr("例如：Mike", "e.g. Mike"),
         )
         company = columns[1].text_input(
-            "公司名（如知道，可选）",
-            placeholder="例如：ABC Trading Co.",
+            i18n.tr("公司名（如知道，可选）", "Company (optional)"),
+            placeholder=i18n.tr("例如：ABC Trading Co.", "e.g. ABC Trading Co."),
+        )
+        manual_phone = st.text_input(
+            i18n.tr("对方联系方式（号码 / 微信，可选）", "Phone / WeChat (optional)"),
+            placeholder="+1 555 123 4567",
+            help=i18n.tr(
+                "不知道可以不填；至少填写对方称呼，别人才能查到。",
+                "Leave blank if unknown. The name is enough for others to find this report.",
+            ),
         )
 
         categories = st.multiselect(
-            "问题类型（可多选，可选）",
+            i18n.tr("问题类型（可多选，可选）", "Issue type (optional, multi-select)"),
             options=CATEGORY_KEYS,
-            format_func=lambda key: CATEGORY_LABELS[key],
+            format_func=i18n.category_label,
             default=["other"],
         )
 
         narrative = st.text_area(
-            "简单写几句经过（必填，至少10个字）",
+            i18n.tr("简单写几句经过（必填，至少 10 个字）", "What happened? (required, at least 10 characters)"),
             height=120,
-            placeholder="比如：收了我5000美金定金就失联了，发微信不回打电话拉黑。",
+            placeholder=i18n.tr(
+                "比如：收了我 5000 美金定金就失联了，发微信不回打电话拉黑。",
+                "e.g. They took a USD 5,000 deposit, then disappeared and blocked me.",
+            ),
         )
 
-        consent = st.checkbox(
-            "我确认说的是真事，恶意举报要负责任的"
-        )
+        consent = st.checkbox(i18n.tr("我确认说的是真事，恶意举报要负责任的", "I confirm this is true; false reports may have legal consequences."))
         publish_screenshots = st.checkbox(
-            "同意公开聊天截图作为证据（选了之后其他用户也能看到你传的截图，不选的话只有管理员能看到）",
-            value=False
+            i18n.tr(
+                "同意公开聊天截图作为证据（不勾选的话只有管理员能看到）",
+                "Allow screenshots to be shown publicly as evidence (otherwise only admins can see them).",
+            ),
+            value=False,
         )
-        submitted = st.form_submit_button("提交举报", type="primary", use_container_width=True)
+        submitted = st.form_submit_button(
+            i18n.tr("提交举报", "Submit report"),
+            type="primary",
+            use_container_width=True,
+        )
 
     if not submitted:
         return
@@ -180,41 +184,54 @@ def _render_form(db, parsed, uploaded_images=None) -> None:
     errors: list[str] = []
     manual_norm = normalize_phone(manual_phone) if manual_phone.strip() else None
     if manual_phone.strip() and not manual_norm:
-        errors.append("号码格式不太对，没关系可以不填，填个名字就行。")
-
-    phones: list[str] = []
-    if manual_norm:
-        phones.append(manual_norm)
-
-    if not phones and not contact_name.strip() and not company.strip():
-        errors.append("至少填一个对方名字或公司名，不然别人查不到。")
+        errors.append(i18n.tr(
+            "号码格式不太对；可以不填号码，只填对方称呼。",
+            "That phone number is invalid. You can leave it blank and fill in the name.",
+        ))
+    if not contact_name.strip():
+        errors.append(i18n.tr("请填写对方称呼 / 昵称。", "Please enter the subject's name or nickname."))
     if len(narrative.strip()) < 10:
-        errors.append("经过写得太短啦，多写两句。")
+        errors.append(i18n.tr("经过写得太短，请至少写 10 个字。", "Please describe what happened in at least 10 characters."))
     if not consent:
-        errors.append("请勾选确认信息真实。")
+        errors.append(i18n.tr("请勾选确认信息真实。", "Please confirm the information is true."))
     if not uploaded_images or len(uploaded_images) < 3:
-        errors.append("必须至少上传3张截图才能提交（1张对方资料+2张聊天记录）。")
+        errors.append(i18n.tr(
+            "必须至少上传 3 张截图（1 张对方资料 + 2 张聊天记录）。",
+            "Upload at least three screenshots (one profile, two chat screenshots).",
+        ))
+    if uploaded_images and len(uploaded_images) > MAX_IMAGES:
+        errors.append(i18n.tr(f"最多上传 {MAX_IMAGES} 张截图。", f"Upload at most {MAX_IMAGES} screenshots."))
+    for image in uploaded_images or []:
+        if image.size > MAX_IMAGE_BYTES:
+            errors.append(i18n.tr(
+                f"截图 {image.name} 超过 10 MB，请压缩后再上传。",
+                f"Screenshot {image.name} exceeds 10 MB; please compress it first.",
+            ))
 
     if errors:
         for error in errors:
             st.error(error)
         return
 
-    # 管理员提交的直接通过，普通用户提交的进入待审核
+    compressed: list[dict] = []
+    try:
+        with st.spinner(i18n.tr("正在压缩截图…", "Compressing screenshots…")):
+            for image in uploaded_images:
+                data, mime = storage.compress_image(image.getvalue())
+                compressed.append(
+                    {
+                        "data": data,
+                        "mime": mime,
+                        "is_public": bool(publish_screenshots),
+                    }
+                )
+    except storage.ImageError as exc:
+        st.error(i18n.tr(f"截图处理失败：{exc}", f"Could not process screenshot: {exc}"))
+        return
+
     report_status = "approved" if is_admin() else "pending"
-
-    # 把上传的截图转成base64存到evidence字段里
-    evidence_text = ""
-    if uploaded_images and len(uploaded_images) >= 3:
-        img_data_list = []
-        for img in uploaded_images:
-            bytes_data = img.getvalue()
-            b64 = base64.b64encode(bytes_data).decode()
-            img_data_list.append(f"data:image/png;base64,{b64}")
-        evidence_text = "|||".join(img_data_list)
-
     report_id = db.add_report(
-        phones=phones,
+        phones=[manual_norm] if manual_norm else [],
         contact_name=contact_name,
         company=company,
         country="",
@@ -223,20 +240,23 @@ def _render_form(db, parsed, uploaded_images=None) -> None:
         currency="USD",
         incident_date=date.today(),
         narrative=narrative,
-        evidence=evidence_text,
+        evidence="",
         source="manual",
         chat_filename=None,
         chat_sha256=None,
         chat_message_count=None,
         credibility=55,
         status=report_status,
+        publish_screenshots=publish_screenshots,
     )
+    db.add_report_images(report_id, compressed)
 
-    query = format_phone(phones[0]) if phones else (company.strip() or contact_name.strip())
+    query = format_phone(manual_norm) if manual_norm else (company.strip() or contact_name.strip())
     st.session_state["report_success"] = {
         "id": report_id,
         "query": query,
-        "label": "、".join(CATEGORY_LABELS.get(key, key) for key in (categories if categories else ["other"])),
+        "label": "、".join(i18n.category_label(key) for key in (categories if categories else ["other"])),
+        "pending": report_status == "pending",
     }
     st.session_state["last_query"] = query
     st.session_state.pop("parsed_chat", None)

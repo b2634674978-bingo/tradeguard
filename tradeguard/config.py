@@ -18,9 +18,14 @@ VERSION = "0.1.0"
 # 项目根目录（app.py 所在目录）
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Streamlit Community Cloud 的仓库路径固定为 /mount/src；本地 Windows 不会命中。
-IS_CLOUD = bool(os.environ.get("TRADEGUARD_CLOUD")) or Path("/mount/src").exists()
-PUBLIC_DEMO = os.environ.get("TRADEGUARD_PUBLIC_DEMO", "1") == "1"
+# Streamlit Community Cloud = /mount/src；Render = RENDER=true；本地 Windows 不会命中。
+IS_CLOUD = (
+    bool(os.environ.get("TRADEGUARD_CLOUD"))
+    or Path("/mount/src").exists()
+    or os.environ.get("RENDER", "").lower() == "true"
+    or bool(os.environ.get("RENDER_SERVICE_ID"))
+)
+PUBLIC_DEMO = os.environ.get("TRADEGUARD_PUBLIC_DEMO", "1" if IS_CLOUD else "0") == "1"
 
 if os.environ.get("TRADEGUARD_DATA_DIR"):
     DATA_DIR = Path(os.environ["TRADEGUARD_DATA_DIR"])
@@ -33,7 +38,9 @@ else:
 DB_PATH = Path(os.environ.get("TRADEGUARD_DB_PATH", DATA_DIR / "tradeguard.db"))
 
 # 上传与解析上限
-MAX_UPLOAD_BYTES = 8 * 1024 * 1024          # 8 MB
+MAX_UPLOAD_BYTES = 8 * 1024 * 1024          # 8 MB（旧聊天文件）
+MAX_IMAGE_BYTES = 10 * 1024 * 1024           # 单张截图上限 10 MB
+MAX_IMAGES = 8                               # 单条举报最多 8 张截图
 MAX_CHAT_CHARS = 2_000_000                   # 解析上限，防超大文件卡死
 DEFAULT_LIMIT = 100
 

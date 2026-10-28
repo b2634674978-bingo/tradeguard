@@ -13,6 +13,7 @@ import os
 
 import streamlit as st
 
+from . import i18n
 from .config import PUBLIC_DEMO
 
 
@@ -21,7 +22,13 @@ def public_mode() -> bool:
 
 
 def _admin_password() -> str | None:
-    return "TradeGuard2026!Admin123"
+    try:
+        secret = st.secrets.get("ADMIN_PASSWORD")
+    except Exception:  # 没有 secrets.toml 或不在 Streamlit 上下文
+        secret = None
+    if secret:
+        return str(secret)
+    return os.environ.get("ADMIN_PASSWORD") or os.environ.get("TRADEGUARD_ADMIN_PASSWORD")
 
 
 def admin_configured() -> bool:
@@ -46,24 +53,32 @@ def login_widget() -> None:
     if not PUBLIC_DEMO:
         return
 
-    st.markdown("<div class='tg-section-title' style='margin-top:1rem'>管理员</div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='tg-section-title' style='margin-top:1rem'>"
+        + i18n.tr("管理员", "Admin")
+        + "</div>",
+        unsafe_allow_html=True,
+    )
     if not admin_configured():
-        st.caption("未配置 ADMIN_PASSWORD：当前为公开只读模式。")
-        st.caption("在 Streamlit Cloud 的 App settings → Secrets 中添加 ADMIN_PASSWORD 后重启应用。")
+        st.caption(i18n.tr("未配置 ADMIN_PASSWORD：当前为公开只读模式。", "ADMIN_PASSWORD is not configured: public read-only mode."))
+        st.caption(i18n.tr(
+            "在平台环境变量或 Secrets 中添加 ADMIN_PASSWORD 后重启应用。",
+            "Add ADMIN_PASSWORD to the platform environment or Secrets, then restart the app.",
+        ))
         return
 
     if is_admin():
-        st.success("管理员模式")
-        if st.button("退出管理员", key="tg_admin_logout", use_container_width=True):
+        st.success(i18n.tr("管理员模式", "Admin mode"))
+        if st.button(i18n.tr("退出管理员", "Log out"), key="tg_admin_logout", use_container_width=True):
             st.session_state["tg_admin"] = False
             st.rerun()
         return
 
-    with st.expander("🔐 管理员登录", expanded=True):
-        password = st.text_input("管理员密码", type="password", key="tg_admin_password")
-        if st.button("登录", key="tg_admin_login", use_container_width=True):
+    with st.expander("🔐 " + i18n.tr("管理员登录", "Admin login"), expanded=True):
+        password = st.text_input(i18n.tr("管理员密码", "Admin password"), type="password", key="tg_admin_password")
+        if st.button(i18n.tr("登录", "Sign in"), key="tg_admin_login", use_container_width=True):
             if verify_password(password):
                 st.session_state["tg_admin"] = True
                 st.rerun()
             else:
-                st.error("密码不正确。")
+                st.error(i18n.tr("密码不正确。", "Incorrect password."))

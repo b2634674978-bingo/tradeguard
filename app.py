@@ -7,7 +7,7 @@ sys.path.append('.')
 
 import streamlit as st
 
-from tradeguard import auth, config
+from tradeguard import auth, config, i18n
 from tradeguard.database import Database
 from tradeguard.ui import components, theme
 from tradeguard.ui.nav import PAGES
@@ -38,27 +38,38 @@ if "_goto" in st.session_state:
 
 with st.sidebar:
     components.brand_block()
+    i18n.language_selector()
     counts = db.quick_counts()
     components.stat_strip(
-        [("举报", counts["reports"]), ("号码", counts["phones"]), ("待复核", counts["pending"])]
+        [
+            (i18n.tr("举报", "Reports"), counts["reports"]),
+            (i18n.tr("号码", "Numbers"), counts["phones"]),
+            (i18n.tr("待复核", "Pending"), counts["pending"]),
+        ]
     )
     st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
-    page = st.radio("导航", PAGES, key="nav", label_visibility="collapsed")
+    page = st.radio(
+        i18n.tr("导航", "Navigation"),
+        PAGES,
+        key="nav",
+        label_visibility="collapsed",
+        format_func=i18n.page_label,
+    )
     if auth.public_mode():
         # 公开部署强制脱敏，避免访客暴露完整号码
         st.session_state["privacy_mode"] = True
-        st.caption("公开演示：列表默认脱敏")
+        st.caption(i18n.tr("公开演示：列表默认脱敏", "Public demo: numbers are masked"))
     else:
-        st.checkbox("列表页隐藏完整号码", value=True, key="privacy_mode")
+        st.checkbox(i18n.tr("列表页隐藏完整号码", "Mask numbers in lists"), value=True, key="privacy_mode")
     if auth.public_mode():
         st.markdown("---")
         auth.login_widget()
         st.markdown("---")
-        st.caption("公开演示 · 数据可能随应用重启重置")
+        st.caption(i18n.tr("公开演示 · 数据可能随应用重启重置", "Public demo · data may reset on restart"))
     else:
         st.markdown("---")
-        st.caption("本地运行 · 数据不上传云端")
-    st.caption("风险提示不是判决；无记录也不等于可信。")
+        st.caption(i18n.tr("本地运行 · 数据不上传云端", "Runs locally · data stays on your machine"))
+    st.caption(i18n.tr("风险提示不是判决；无记录也不等于可信。", "Risk signals are not verdicts; no record does not mean safe."))
 
 
 RENDERERS = {
@@ -72,9 +83,15 @@ RENDERERS = {
 RENDERERS[page](db)
 
 if config.IS_CLOUD:
-    footer_note = "TradeGuard · 云端演示版 · SQLite 数据为临时存储，应用重启后会重置"
+    footer_note = i18n.tr(
+        "TradeGuard · 云端演示版 · SQLite 数据为临时存储，应用重启后会重置",
+        "TradeGuard · Cloud demo · SQLite storage is temporary and resets on restart",
+    )
 else:
-    footer_note = "TradeGuard · 本地优先原型 · 所有记录仅保存在这台电脑上"
+    footer_note = i18n.tr(
+        "TradeGuard · 本地优先原型 · 所有记录仅保存在这台电脑上",
+        "TradeGuard · Local-first prototype · all records stay on this computer",
+    )
 
 st.markdown(
     "<div style='text-align:center;color:#94a3b8;font-size:.75rem;margin-top:2.5rem'>"

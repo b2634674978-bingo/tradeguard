@@ -7,6 +7,7 @@ from datetime import date
 
 import streamlit as st
 
+from .. import i18n
 from ..auth import is_admin
 from ..config import APP_TAGLINE, APP_TITLE
 from ..normalize import format_phone, mask_phone
@@ -19,10 +20,10 @@ def esc(value: object) -> str:
 
 def risk_badge(risk: dict) -> str:
     tone = risk.get("tone", "unknown")
-    label = risk.get("label", "无记录")
+    label = i18n.risk_label(risk.get("level", "unknown"))
     score = int(risk.get("score") or 0)
     if tone == "unknown":
-        return '<span class="tg-risk unknown">暂无记录</span>'
+        return '<span class="tg-risk unknown">' + i18n.tr("暂无记录", "No record") + "</span>"
     return f'<span class="tg-risk {tone}">{esc(label)} · {score}</span>'
 
 
@@ -30,7 +31,7 @@ def category_pills(categories: list[dict]) -> str:
     if not categories:
         return ""
     return "".join(
-        f'<span class="tg-pill">{esc(item["label"])} <b>×{item["count"]}</b></span>'
+        f'<span class="tg-pill">{esc(i18n.category_label(item["key"]))} <b>×{item["count"]}</b></span>'
         for item in categories
     )
 
@@ -44,14 +45,14 @@ def _last_seen_label(value: str) -> str:
         return value
     days = (date.today() - seen).days
     if days <= 0:
-        return "今天"
+        return i18n.tr("今天", "today")
     if days == 1:
-        return "昨天"
+        return i18n.tr("昨天", "yesterday")
     if days < 30:
-        return f"{days} 天前"
+        return i18n.tr(f"{days} 天前", f"{days} days ago")
     if days < 365:
-        return f"{days // 30} 个月前"
-    return f"{days // 365} 年前"
+        return i18n.tr(f"{days // 30} 个月前", f"{days // 30} months ago")
+    return i18n.tr(f"{days // 365} 年前", f"{days // 365} years ago")
 
 
 def profile_card(profile: dict, db, *, masked: bool = False, show_appeal: bool = True, key_prefix: str = "p") -> None:
@@ -59,7 +60,7 @@ def profile_card(profile: dict, db, *, masked: bool = False, show_appeal: bool =
     phone_html = f'<div class="tg-phone">{esc(phone)}</div>' if phone else ""
     company = esc(profile.get("company"))
     country = esc(profile.get("country"))
-    meta = " · ".join(part for part in (company, country) if part) or "未填写公司 / 国家"
+    meta = " · ".join(part for part in (company, country) if part) or i18n.tr("未填写公司 / 国家", "No company / country")
     demo = '<span class="tg-tag">演示数据</span>' if profile.get("has_demo") else ""
     reasons = " · ".join(esc(reason) for reason in profile["risk"].get("reasons", [])[:4])
     match = (
@@ -80,35 +81,40 @@ def profile_card(profile: dict, db, *, masked: bool = False, show_appeal: bool =
             <div class="tg-right">
               {risk_badge(profile["risk"])}
               <div class="tg-sub" style="margin-top:.35rem">
-                {profile["report_count"]} 条记录 · 最近 {_last_seen_label(profile.get("last_seen", ""))}
+                {profile["report_count"]} {i18n.tr("条记录", "reports")} · {i18n.tr("最近", "last")} {_last_seen_label(profile.get("last_seen", ""))}
               </div>
             </div>
           </div>
           <div class="tg-pills">{category_pills(profile.get("categories", []))}</div>
-          <div class="tg-reasons"><span>评分依据</span> · {reasons}</div>
+          <div class="tg-reasons"><span>{i18n.tr("评分依据", "Why this score")}</span> · {reasons}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
     reports = profile.get("reports", [])
-    with st.expander(f"查看 {len(reports)} 条举报记录与证据"):
+    with st.expander(
+        i18n.tr(f"查看 {len(reports)} 条举报记录与证据", f"View {len(reports)} report(s) and evidence")
+    ):
         for report in reports:
-            report_card(report)
+            report_card(report, db, public_view=not is_admin())
         if show_appeal and reports:
             appeal_block(db, reports[0], key_prefix=key_prefix)
 
 
-def report_card(report: dict) -> None:
+def report_card(report: dict, db=None, *, public_view: bool = True) -> None:
     amount = ""
     if report.get("amount"):
         amount = f' · {esc(report.get("currency", ""))} {float(report["amount"]):,.0f}'
-    labels = " · ".join(esc(label) for label in report.get("category_labels", []))
-    source = esc(report.get("source_label", ""))
-    demo = " · 演示" if report.get("source") == "demo" else ""
+    labels = " · ".join(
+        esc(i18n.category_label(key)) for key in report.get("categories", [])
+    )
+    source = esc(i18n.source_label(report.get("source", "")))
+    demo = " · " + i18n.tr("演示", "demo") if report.get("source") == "demo" else ""
     evidence = ""
-    if report.get("evidence"):
-        evidence = f'<div class="tg-quote">{esc(report["evidence"])}</div>'
+    evidence_text = str(report.get("evidence") or "")
+    if evidence_text and not evidence_text.startswith("data:image"):
+        evidence = f'<div class="tg-quote">{esc(evidence_text)}</div>'
     chat_meta = ""
     if report.get("chat_sha256"):
         chat_meta = (
@@ -121,7 +127,7 @@ def report_card(report: dict) -> None:
         <div style="padding:.85rem 0; border-top:1px solid #eef2f7">
           <div class="tg-sub" style="display:flex; justify-content:space-between; gap:.6rem; flex-wrap:wrap">
             <span>{esc(report.get("date", ""))} · {labels}{amount}</span>
-            <span>{source}{demo} · 可信度 {report.get("credibility", 60)}</span>
+            <span>{source}{demo} · {i18n.tr("可信度", "credibility")} {report.get("credibility", 60)}</span>
           </div>
           <div style="font-size:.9rem; color:#334155; line-height:1.7; margin-top:.35rem; white-space:pre-wrap">{esc(report.get("narrative"))}</div>
           {evidence}
@@ -131,27 +137,53 @@ def report_card(report: dict) -> None:
         unsafe_allow_html=True,
     )
 
+    if db is not None and report.get("id"):
+        images = db.get_report_images(report["id"], public_only=public_view)
+        if images:
+            st.caption(
+                i18n.tr("举报人同意公开的截图", "Screenshots shared by the reporter")
+                if public_view
+                else i18n.tr("截图证据（管理员可见）", "Screenshots (admin only)")
+            )
+            for index, image in enumerate(images):
+                st.image(
+                    image["data"],
+                    caption=i18n.tr(f"截图 {index + 1}", f"Screenshot {index + 1}"),
+                    use_container_width=True,
+                )
+
 
 def appeal_block(db, report: dict, *, key_prefix: str = "a") -> None:
     if not is_admin():
         return
-    with st.expander("我是当事人 / 信息有误？提交申诉或补充说明"):
-        st.caption("申诉会记录在本机数据库中，并在「设置与合规」里显示。原型阶段不自动删除任何记录。")
+    with st.expander(
+        i18n.tr("我是当事人 / 信息有误？提交申诉或补充说明", "Are you the subject? File an appeal")
+    ):
+        st.caption(i18n.tr(
+            "申诉会记录在本机数据库中，并在「设置与合规」里显示。原型阶段不自动删除任何记录。",
+            "Appeals are stored locally and shown in Settings. Nothing is removed automatically.",
+        ))
         with st.form(f"appeal_form_{key_prefix}_{report.get('id')}"):
             message = st.text_area(
-                "申诉说明",
+                i18n.tr("申诉说明", "Appeal details"),
                 key=f"appeal_text_{key_prefix}_{report.get('id')}",
-                placeholder="请说明：哪一条信息与事实不符、你与对方的关系、可提供的证明……",
+                placeholder=i18n.tr(
+                    "请说明：哪一条信息与事实不符、你与对方的关系、可提供的证明……",
+                    "Explain what is inaccurate, your relationship to the subject, and any proof you can provide.",
+                ),
                 height=100,
             )
-            submitted = st.form_submit_button("提交申诉")
+            submitted = st.form_submit_button(i18n.tr("提交申诉", "Submit appeal"))
         if submitted:
             try:
                 db.add_appeal(message, report_id=report.get("id"))
             except ValueError as exc:
                 st.error(str(exc))
             else:
-                st.success("申诉已记录。原型阶段由你本人在「设置」中复核。")
+                st.success(i18n.tr(
+                    "申诉已记录。原型阶段由你本人在「设置」中复核。",
+                    "Appeal recorded. You can review it in Settings.",
+                ))
 
 
 def empty_state(icon: str, title: str, lines: list[str]) -> None:
@@ -173,12 +205,12 @@ def stat_strip(items: list[tuple[str, str]]) -> None:
 
 def brand_block() -> None:
     st.markdown(
-        """
+        f"""
         <div class="tg-brand">
           <div class="tg-logo">🛡️</div>
           <div>
             <div class="tg-brand-name">TradeGuard</div>
-            <div class="tg-brand-sub">外贸防骗情报库</div>
+            <div class="tg-brand-sub">{i18n.tr("外贸防骗情报库", "Trade scam intel")}</div>
           </div>
         </div>
         """,
