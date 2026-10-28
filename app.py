@@ -74,10 +74,10 @@ def get_db() -> Database:
                 
                 conn.execute("""
                     INSERT INTO reports (
-                        contact_name, company_name, contact_platform, contact_info,
+                        contact_name, contact_platform, contact_info,
                         issue_type, description, amount, status, created_at, source
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (name, company, platform, phone, scam_type, desc, amount, "approved", report_time, "manual"))
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (name, platform, phone, scam_type, desc, amount, "approved", report_time, "manual"))
             conn.commit()
     
     return database
