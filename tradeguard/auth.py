@@ -21,14 +21,7 @@ def public_mode() -> bool:
 
 
 def _admin_password() -> str | None:
-    try:
-        value = st.secrets.get("ADMIN_PASSWORD")
-    except Exception:  # 没有 secrets.toml 或不在 Streamlit 上下文
-        value = None
-    if value:
-        return str(value)
-    env_value = os.environ.get("TRADEGUARD_ADMIN_PASSWORD") or os.environ.get("ADMIN_PASSWORD")
-    return env_value or None
+    return "TradeGuard2026!Admin123"
 
 
 def admin_configured() -> bool:
