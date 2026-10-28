@@ -93,7 +93,7 @@ section[data-testid="stSidebar"] a { color: #5eead4 !important; }
 }
 .tg-hero h1 { margin: 0 0 0.5rem; font-size: 2.05rem; line-height: 1.18; letter-spacing: -0.02em; }
 .tg-hero.compact h1 { font-size: 1.45rem; }
-.tg-hero p { margin: 0; color: #b8ddd7; font-size: 0.98rem; line-height: 1.65; max-width: 760px; }
+.tg-hero p { margin: 0; color: #e0f2f1; font-size: 1rem; line-height: 1.65; max-width: 760px; font-weight: 500; }
 .tg-hero .tg-hero-tag {
   display: inline-block; margin-top: 1rem; font-size: 0.75rem; color: #99f6e4;
   border: 1px solid rgba(94, 234, 212, 0.35); border-radius: 999px; padding: 0.28rem 0.7rem;
