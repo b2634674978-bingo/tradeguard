@@ -139,31 +139,6 @@ def render(db) -> None:
                 st.rerun()
 
         with st.container(border=True):
-            st.markdown("#### 待审核举报队列")
-            pending = db.list_pending_reports(20)
-            if not pending:
-                st.caption("暂无待审核的举报。")
-            else:
-                st.caption(f"有 {len(pending)} 条举报等待你审核。")
-                for report in pending:
-                    with st.expander(f"#{report['id']} · {report.get('contact_name', '')} · {report.get('phones', '')} · {report['created_at'][:10]}"):
-                        st.write(f"**公司**：{report.get('company', '未填写')}")
-                        st.write(f"**国家**：{report.get('country', '未填写')}")
-                        st.write(f"**类别**：{report.get('categories', '')}")
-                        if report.get('amount'):
-                            st.write(f"**金额**：{report.get('currency', '')} {report.get('amount')}")
-                        st.write(f"**经过**：{report.get('narrative', '')}")
-                        col1, col2 = st.columns(2)
-                        if col1.button("✅ 通过收录", key=f"approve_{report['id']}", use_container_width=True):
-                            db.set_status(report['id'], 'approved')
-                            st.success("已通过！")
-                            st.rerun()
-                        if col2.button("❌ 驳回", key=f"reject_{report['id']}", use_container_width=True):
-                            db.set_status(report['id'], 'rejected')
-                            st.info("已驳回。")
-                            st.rerun()
-
-        with st.container(border=True):
             st.markdown("#### 申诉 / 纠错队列")
             appeals = db.list_appeals(20)
             if not appeals:
