@@ -202,6 +202,28 @@ div[data-testid="stMetricValue"] { color: #0f172a; }
 }
 .stTextInput input, .stTextArea textarea { border-radius: 10px; }
 .stSelectbox div[data-baseweb="select"] > div { border-radius: 10px; }
+
+/* 侧边栏展开/收回按钮更显眼 */
+section[data-testid="stSidebarCollapseButton"],
+button[data-testid="stSidebarCollapseButton"] {
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 12px !important;
+  background: linear-gradient(135deg, #14b8a6, #0f766e) !important;
+  box-shadow: 0 4px 12px rgba(20, 184, 166, 0.4) !important;
+  border: none !important;
+  margin: 12px !important;
+}
+section[data-testid="stSidebarCollapseButton"] svg,
+button[data-testid="stSidebarCollapseButton"] svg {
+  fill: #ffffff !important;
+  width: 24px !important;
+  height: 24px !important;
+}
+button[data-testid="stSidebarCollapseButton"]:hover {
+  background: linear-gradient(135deg, #0d9488, #0f766e) !important;
+  transform: scale(1.05);
+}
 </style>
 """
 
